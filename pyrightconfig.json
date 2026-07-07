@@ -1,0 +1,16 @@
+{
+  "venvPath": ".",
+  "venv": ".venv310",
+  "extraPaths": [
+    "."
+  ],
+  "typeCheckingMode": "basic",
+  "reportOptionalMemberAccess": "none",
+  "reportPossiblyUnboundVariable": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none",
+  "reportCallIssue": "none",
+  "reportIncompatibleMethodOverride": "none",
+  "reportRedeclaration": "none",
+  "reportReturnType": "none"
+}

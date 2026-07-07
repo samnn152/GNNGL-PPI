@@ -5,11 +5,32 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import JumpingKnowledge
 
-from GIn import GINConv
+from models.gin import GINConv
 # from transformer import GotermEncoder
 
 # from CSRA_ import MHA
-from subgraph_model import SubgraphGNNKernel
+from models.subgraph_model import SubgraphGNNKernel
+
+
+class GlobalLocalFusionNode(nn.Module):
+    def __init__(self, initial_alpha=0.5, preserve_sum_scale=True):
+        super().__init__()
+        initial_alpha = min(max(initial_alpha, 1e-6), 1 - 1e-6)
+        initial_logit = torch.logit(torch.tensor(initial_alpha, dtype=torch.float32))
+        self.alpha_logit = nn.Parameter(initial_logit)
+        self.preserve_sum_scale = preserve_sum_scale
+
+    @property
+    def alpha(self):
+        return torch.sigmoid(self.alpha_logit)
+
+    def forward(self, global_x, local_x):
+        alpha = self.alpha
+        fused = alpha * global_x + (1 - alpha) * local_x
+        if self.preserve_sum_scale:
+            # alpha=0.5 starts exactly as the original global + local fusion.
+            return 2 * fused
+        return fused
 
 
 
@@ -91,6 +112,7 @@ class GNNGL_PPI(torch.nn.Module):
         self.fc2 = nn.Linear(hidden, class_num)
         self.lin1_o = nn.Linear(hidden, hidden)
         self.lin2_o = nn.Linear(hidden, hidden)
+        self.global_local_fusion = GlobalLocalFusionNode(initial_alpha=0.5)
 
 
     def reset_parameters(self):
@@ -134,7 +156,7 @@ class GNNGL_PPI(torch.nn.Module):
         x = F.dropout(x, p=p, training=self.training)
         x = self.lin2(x)
 
-        x = x + sub_x
+        x = self.global_local_fusion(global_x=x, local_x=sub_x)
 
         node_id = edge_index[:, train_edge_id]
         x1 = x[node_id[0]]

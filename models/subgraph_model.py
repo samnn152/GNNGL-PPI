@@ -3,7 +3,7 @@ from torch_geometric.nn import GINConv
 from torch_geometric.nn.inits import reset
 from torch_scatter import scatter
 
-from elements import *
+from models.elements import *
 
 
 # class BiLinearAttention(nn.Module):

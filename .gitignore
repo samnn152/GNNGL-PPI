@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+.venv/
+.venv310/
+.vscode/
+
+data/
+pre_train_data/
+save_model/
+
+*.zip

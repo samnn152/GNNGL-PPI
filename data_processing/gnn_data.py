@@ -1,5 +1,7 @@
 import copy
+import hashlib
 import json
+import os
 import pickle
 import random
 
@@ -9,7 +11,7 @@ from torch_geometric.data import Data
 from torch_geometric.utils import from_networkx, to_networkx
 from tqdm import tqdm
 
-from utils import UnionFindSet, get_bfs_sub_graph, get_dfs_sub_graph
+from common.utils import UnionFindSet, get_bfs_sub_graph, get_dfs_sub_graph
 
 
 class GNN_DATA:
@@ -239,18 +241,58 @@ class GNN_DATA:
 
             self.pvec_dict[p_name] = temp_vec
 
+    def _pretrained_key(self, protein_name):
+        return protein_name.split('.', 1)[1] if '.' in protein_name else protein_name
+
+    def _sequence_embedding(self, seq, dim=512):
+        emb = np.zeros(dim, dtype=np.float32)
+        if not seq:
+            return emb
+
+        amino_acids = 'ACDEFGHIKLMNPQRSTVWY'
+        aa_index = {aa: idx for idx, aa in enumerate(amino_acids)}
+        for acid in seq:
+            if acid in aa_index:
+                emb[aa_index[acid]] += 1.0
+        emb[:len(amino_acids)] /= max(len(seq), 1)
+
+        hash_start = len(amino_acids)
+        hash_dim = dim - hash_start
+        for kmer_size in (2, 3):
+            if len(seq) < kmer_size:
+                continue
+            for index in range(len(seq) - kmer_size + 1):
+                token = seq[index:index + kmer_size].encode('utf-8')
+                digest = hashlib.blake2b(token, digest_size=8).digest()
+                bucket = int.from_bytes(digest, 'little') % hash_dim
+                sign = 1.0 if digest[0] % 2 == 0 else -1.0
+                emb[hash_start + bucket] += sign
+
+        norm = np.linalg.norm(emb[hash_start:])
+        if norm > 0:
+            emb[hash_start:] /= norm
+        return emb
+
     def pretrained_emb_init(self, pre_emb_path):
-        with open(pre_emb_path, 'rb') as f:
-            self.pretrained_emb_dict = pickle.load(f)
-        f.close()
+        if pre_emb_path and os.path.exists(pre_emb_path):
+            with open(pre_emb_path, 'rb') as f:
+                self.pretrained_emb_dict = pickle.load(f)
+            return
+
+        print("Warning: pretrained embedding file not found: {}".format(pre_emb_path))
+        print("Using deterministic 512-dim sequence fallback embeddings instead.")
+        self.pretrained_emb_dict = {}
+        for name, seq in self.pseq_dict.items():
+            self.pretrained_emb_dict[self._pretrained_key(name)] = self._sequence_embedding(seq)
 
     # 添加经过预训练的embedding
     def get_feature_pretrained(self, pseq_path, pre_emb_path):
         self.get_protein_aac(pseq_path)
         self.pretrained_emb_init(pre_emb_path)
         for name in tqdm(self.protein_name.keys()):
+            key = self._pretrained_key(name)
             self.protein_dict[name] = np.array(
-                self.pretrained_emb_dict[name.split('.')[1]])  # pretrained_emb_dict[name]: (512, )
+                self.pretrained_emb_dict[key])  # pretrained_emb_dict[name]: (512, )
         print('self.protein_dict', len(self.protein_dict))
 
     # def go_onehot(self, go_onehot_path):
@@ -455,6 +497,10 @@ class GNN_DATA:
 
     def split_dataset(self, train_valid_index_path, test_size=0.2, random_new=False, mode='random'):
         if random_new:
+            index_dir = os.path.dirname(train_valid_index_path)
+            if index_dir:
+                os.makedirs(index_dir, exist_ok=True)
+
             if mode == 'random':
                 print('+++++++++++++++++++++++++++++random++++++++++++++++++++++++++++++++++++++')
                 ppi_num = int(self.edge_num // 2)

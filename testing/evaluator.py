@@ -1,6 +1,8 @@
 import argparse
+import glob
 import json
 import math
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,10 +15,10 @@ from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 import torch.nn.functional as F
 
-from gnn_data import GNN_DATA
-from gnn_model import GNNGL_PPI
-from subgraph import SubgraphsData, extract_subgraphs, to_sparse, combine_subgraphs
-from utils import Metrictor_PPI
+from data_processing.gnn_data import GNN_DATA
+from models.gnn_model import GNNGL_PPI
+from graph.subgraph import SubgraphsData, extract_subgraphs, to_sparse, combine_subgraphs
+from common.utils import Metrictor_PPI
 
 
 def boolean_string(s):
@@ -26,6 +28,12 @@ def boolean_string(s):
 
 
 parser = argparse.ArgumentParser(description='Test Model')
+parser.add_argument('--dataset_type', default='shs27k', choices=['shs27k', 'shs148k', 'string'],
+                    help='dataset preset')
+parser.add_argument('--finetune_type', default='MASSA', type=str,
+                    help='pretrained embedding preset name')
+parser.add_argument('--mode', default='random', type=str,
+                    help='split mode preset')
 parser.add_argument('--description', default=None, type=str,
                     help='train description')
 parser.add_argument('--ppi_path', default=None, type=str,
@@ -42,6 +50,64 @@ parser.add_argument('--gnn_model', default=None, type=str,
                     help="gnn trained model")
 parser.add_argument('--test_all', default='False', type=boolean_string,
                     help="test all or test separately")
+
+
+def apply_default_config(args):
+    dataset_files = {
+        'shs27k': (
+            './data/protein.actions.SHS27k.STRING.txt',
+            './data/protein.SHS27k.sequences.dictionary.tsv',
+        ),
+        'shs148k': (
+            './data/protein.actions.SHS148k.STRING.txt',
+            './data/protein.SHS148k.sequences.dictionary.tsv',
+        ),
+        'string': (
+            './data/9606.protein.actions.all_connected.txt',
+            './data/protein.STRING_all_connected.sequences.dictionary.tsv',
+        ),
+    }
+
+    dataset_type = args.dataset_type
+    mode = args.mode
+    ppi_path, pseq_path = dataset_files[dataset_type]
+
+    if args.description is None:
+        args.description = "test"
+    if args.ppi_path is None:
+        args.ppi_path = ppi_path
+    if args.pseq_path is None:
+        args.pseq_path = pseq_path
+    if args.vec_path is None:
+        args.vec_path = './data/vec5_CTC.txt'
+    if args.pre_emb_path is None:
+        args.pre_emb_path = './pre_train_data/shs_{}.pickle'.format(args.finetune_type)
+    if args.index_path is None:
+        args.index_path = './train_valid_index_json_{}/{}.{}.fold1.json'.format(dataset_type, dataset_type, mode)
+        fallback_index_path = './train_valid_index_json/{}.{}.fold1.json'.format(dataset_type, mode)
+        if not os.path.exists(args.index_path) and os.path.exists(fallback_index_path):
+            args.index_path = fallback_index_path
+    if args.gnn_model is None:
+        default_model_path = './save_model/{}_{}/gnn_test_{}_{}/gnn_model_valid_best.ckpt'.format(
+            mode,
+            dataset_type,
+            dataset_type,
+            mode,
+        )
+        if os.path.exists(default_model_path):
+            args.gnn_model = default_model_path
+        else:
+            candidates = glob.glob(
+                './save_model/{}_{}/gnn_test_{}_{}*/gnn_model_valid_best.ckpt'.format(
+                    mode,
+                    dataset_type,
+                    dataset_type,
+                    mode,
+                )
+            )
+            args.gnn_model = max(candidates, key=os.path.getmtime) if candidates else default_model_path
+
+    return args
 
 
 # 提取指定层级的特征
@@ -198,7 +264,13 @@ def test(model, graph, test_mask, device):
         else:
             valid_edge_id = test_mask[step * batch_size: step * batch_size + batch_size]
 
-        output= model(graph.x, graph.edge_index, valid_edge_id, graph.edge_attr, graph)
+        output = model(graph.x, graph.edge_index, valid_edge_id, graph.edge_attr, graph)
+        label = graph.edge_attr_1[valid_edge_id]
+        label = label.type(torch.FloatTensor).to(device)
+        pre_result = (nn.Sigmoid()(output) > 0.5).type(torch.FloatTensor).to(device)
+
+        valid_pre_result_list.append(pre_result.cpu().data)
+        valid_label_list.append(label.cpu().data)
 
     valid_pre_result_list = torch.cat(valid_pre_result_list, dim=0)
     valid_label_list = torch.cat(valid_label_list, dim=0)
@@ -212,7 +284,13 @@ def test(model, graph, test_mask, device):
 
 
 def main():
-    args = parser.parse_args()
+    args = apply_default_config(parser.parse_args())
+    if not os.path.exists(args.index_path):
+        raise FileNotFoundError("Index file not found: {}".format(args.index_path))
+    if not os.path.exists(args.gnn_model):
+        raise FileNotFoundError(
+            "Model checkpoint not found: {}. Train a model first or pass --gnn_model.".format(args.gnn_model)
+        )
 
     ppi_data = GNN_DATA(ppi_path=args.ppi_path)
 
@@ -223,7 +301,7 @@ def main():
 
     graph = ppi_data.data
 
-    graph = SubgraphsData(**{k: v for k, v in graph})
+    graph = SubgraphsData(**graph.to_dict())
 
     # Step 2: extract subgraphs
     subgraphs_nodes_mask, subgraphs_edges_mask, hop_indicator_dense = extract_subgraphs(graph.edge_index,
@@ -311,7 +389,6 @@ def main():
                       feature_fusion=None, class_num=7).to(device)
 
     model.load_state_dict(torch.load(args.gnn_model, map_location=torch.device('cpu'))['state_dict'])
-    model.load_state_dict(torch.load(args.gnn_model)['state_dict'])
 
     graph.to(device)
 

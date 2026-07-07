@@ -35,7 +35,27 @@ The data processing codes in gnn_data.py (Class GNN_DATA), including:
 
 ### Training
 
-Training codes in gnn_train.py, and the run script in run.py.
+Training entrypoint:
+
+```bash
+python main.py
+```
+
+Testing entrypoint:
+
+```bash
+python main_test.py
+```
+
+### MASSA embeddings
+
+The MASSA GNN-PPI pretrained embeddings can be prepared with:
+
+```bash
+python -m pretraining.massa
+```
+
+This installs `pre_train_data/shs_MASSA.pickle`, which is used by default.
 
 
 #### Dataset Download:
