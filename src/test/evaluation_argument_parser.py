@@ -35,6 +35,8 @@ class EvaluationArgumentParser:
                             help='cnn_rnn and gnn unified train and valid ppi index')
         parser.add_argument('--gnn_model', default=None, type=str,
                             help="gnn trained model")
+        parser.add_argument('--fusion_strategy', default=None, choices=['dynamic', 'scalar'],
+                            help='global/local fusion strategy used by the checkpoint')
         parser.add_argument('--test_all', default='False', type=EvaluationBooleanArgument.parse,
                             help="test all or test separately")
         return parser

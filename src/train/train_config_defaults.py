@@ -58,6 +58,8 @@ class TrainConfigDefaults:
             args.save_path = os.path.join(output_dir, '{}_{}'.format(mode, dataset_type))
         if args.graph_only_train is None:
             args.graph_only_train = False
+        if args.fusion_strategy is None:
+            args.fusion_strategy = 'dynamic'
         if args.batch_size is None:
             args.batch_size = 1024
         if args.epochs is None:

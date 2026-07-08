@@ -66,6 +66,8 @@ python main.py \
 
 Individual files can still be overridden with `--ppi_path`, `--pseq_path`, `--vec_path`, `--pre_emb_path`, `--train_valid_index_path`, and `--save_path`.
 
+Global/local fusion is selected with `--fusion_strategy dynamic` or `--fusion_strategy scalar`. Dynamic gated fusion is the default; use `scalar` when loading older scalar-fusion checkpoints.
+
 Test entrypoint:
 
 ```bash
@@ -96,4 +98,3 @@ SHS27k and SHS148k:
 
 This repositorie uses the processed dataset download path:
 - https://pan.baidu.com/s/1FU-Ij3LxyP9dOHZxO3Aclw (Extraction code: tibn)
-

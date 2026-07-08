@@ -49,7 +49,7 @@ class ModelEvaluator:
         graph = cls._build_graph(ppi_data)
         ppi_list = cls._edge_list(graph)
         cls._attach_masks(graph, ppi_list, args.index_path)
-        model, device = cls._load_model(graph, args.gnn_model)
+        model, device = cls._load_model(graph, args.gnn_model, args.fusion_strategy)
         graph.to(device)
         cls._print_results(model, graph, device, args.test_all)
 
@@ -170,11 +170,32 @@ class ModelEvaluator:
         return test1_mask, test2_mask, test3_mask
 
     @staticmethod
-    def _load_model(graph, model_path):
+    def _load_model(graph, model_path, fusion_strategy):
         device = torch.device('cpu')
-        model = GNNGL_PPI(graph, gin_in_feature=256, num_layers=1, hidden=512, use_jk=False, train_eps=True,
-                          feature_fusion=None, class_num=7).to(device)
-        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['state_dict'])
+        model = GNNGL_PPI(
+            graph,
+            gin_in_feature=256,
+            num_layers=1,
+            hidden=512,
+            use_jk=False,
+            train_eps=True,
+            feature_fusion=None,
+            class_num=7,
+            fusion_strategy=fusion_strategy,
+        ).to(device)
+        checkpoint = torch.load(model_path, map_location=torch.device('cpu'))['state_dict']
+        try:
+            model.load_state_dict(checkpoint)
+        except RuntimeError:
+            if fusion_strategy != 'scalar':
+                raise
+            missing_keys, unexpected_keys = model.load_state_dict(checkpoint, strict=False)
+            print(
+                "Loaded legacy scalar checkpoint with missing keys: {}, unexpected keys: {}".format(
+                    missing_keys,
+                    unexpected_keys,
+                )
+            )
         return model, device
 
     @classmethod

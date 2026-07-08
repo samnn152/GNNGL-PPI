@@ -14,8 +14,17 @@ class BuildGNNGLModelTrainStep(PipelineStep):
         print(context.device)
         context.graph.to(context.device)
 
-        context.model = GNNGL_PPI(context.graph, gin_in_feature=256, num_layers=1, hidden=512, use_jk=False,
-                                  train_eps=True, feature_fusion=None, class_num=7).to(context.device)
+        context.model = GNNGL_PPI(
+            context.graph,
+            gin_in_feature=256,
+            num_layers=1,
+            hidden=512,
+            use_jk=False,
+            train_eps=True,
+            feature_fusion=None,
+            class_num=7,
+            fusion_strategy=args.fusion_strategy,
+        ).to(context.device)
 
         context.optimizer = torch.optim.Adam(context.model.parameters(), lr=0.001, weight_decay=5e-4)
 

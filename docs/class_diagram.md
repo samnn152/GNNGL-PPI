@@ -77,7 +77,8 @@ classDiagram
 
     namespace ModelLayer {
         class GNNGL_PPI
-        class GlobalLocalFusionNode
+        class DynamicGlobalLocalFusionNode
+        class ScalarGlobalLocalFusionNode
         class GINConv
         class SubgraphGNNKernel
         class GNN
@@ -157,7 +158,8 @@ classDiagram
     DatasetSplitter ..> GraphSplitSampler
     PPIGraphBuilder ..> UnionFindSet
 
-    GNNGL_PPI *-- GlobalLocalFusionNode
+    GNNGL_PPI *-- DynamicGlobalLocalFusionNode
+    GNNGL_PPI ..> ScalarGlobalLocalFusionNode : optional strategy
     GNNGL_PPI *-- GINConv
     GNNGL_PPI *-- SubgraphGNNKernel
     SubgraphGNNKernel *-- GNN
@@ -199,7 +201,8 @@ classDiagram
 
     namespace ModelLayer {
         class GNNGL_PPI
-        class GlobalLocalFusionNode
+        class DynamicGlobalLocalFusionNode
+        class ScalarGlobalLocalFusionNode
         class GINConv
         class SubgraphGNNKernel
         class GNN
@@ -223,7 +226,8 @@ classDiagram
     ModelEvaluator ..> Metrictor_PPI : score output
     EvaluationToolkit ..> ModelEvaluator : optional analysis
 
-    GNNGL_PPI *-- GlobalLocalFusionNode
+    GNNGL_PPI *-- DynamicGlobalLocalFusionNode
+    GNNGL_PPI ..> ScalarGlobalLocalFusionNode : optional strategy
     GNNGL_PPI *-- GINConv
     GNNGL_PPI *-- SubgraphGNNKernel
     SubgraphGNNKernel *-- GNN

@@ -47,6 +47,8 @@ class TrainArgumentParser:
                             help='model save path')
         parser.add_argument('--graph_only_train', default=None, type=BooleanArgument.parse,
                             help='train ppi graph conctruct by train or all(train with test)')
+        parser.add_argument('--fusion_strategy', default=None, choices=['dynamic', 'scalar'],
+                            help='global/local fusion strategy')
         parser.add_argument('--batch_size', default=None, type=int,
                             help="gnn train batch size, edge batch size")
         parser.add_argument('--epochs', default=None, type=int,

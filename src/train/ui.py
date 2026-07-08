@@ -165,6 +165,7 @@ class TerminalTrainUI(TrainObserver):
             ("pretrained", args.pre_emb_path),
             ("index", args.train_valid_index_path),
             ("save", self.context.save_path),
+            ("fusion", args.fusion_strategy),
         ]
         if graph is not None:
             rows.extend([
@@ -210,7 +211,7 @@ class TerminalTrainUI(TrainObserver):
             self._color("━" * local_width, self.RED),
             self.RESET,
         )
-        return "fusion alpha  global {:>6.2%} {} local {:>6.2%}".format(
+        return "fusion mean alpha  global {:>6.2%} {} local {:>6.2%}".format(
             alpha,
             bar,
             1 - alpha,

@@ -54,6 +54,8 @@ class EvaluationConfigDefaults:
                 args.index_path = fallback_index_path
         if args.gnn_model is None:
             args.gnn_model = cls._default_model_path(mode, dataset_type, output_dir)
+        if args.fusion_strategy is None:
+            args.fusion_strategy = 'dynamic'
 
         return args
 
