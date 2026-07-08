@@ -1,11 +1,12 @@
 import numpy as np
 import torch
 
-from training.args import apply_default_config, build_parser
-from training.context import TrainingContext
-from training.steps import build_training_pipeline
-from training.trainer import train
-from training.ui import build_training_observer
+from src.train.args import TrainArgumentParser
+from src.train.train_config_defaults import TrainConfigDefaults
+from src.train.context import TrainContext
+from src.train.steps import TrainPipelineFactory
+from src.train.trainer import GNNTrainer
+from src.train.ui import TrainObserverFactory
 
 # from tensorboardX import SummaryWriter
 
@@ -14,7 +15,7 @@ torch.manual_seed(1)
 torch.cuda.manual_seed(1)
 
 
-def require_training_context(context):
+def require_train_context(context):
     required_fields = [
         "model",
         "graph",
@@ -28,21 +29,21 @@ def require_training_context(context):
     ]
     missing_fields = [field for field in required_fields if getattr(context, field) is None]
     if missing_fields:
-        raise RuntimeError("Training pipeline missing fields: {}".format(", ".join(missing_fields)))
+        raise RuntimeError("Train pipeline missing fields: {}".format(", ".join(missing_fields)))
     return context
 
 
 def main():
-    args = apply_default_config(build_parser().parse_args())
+    args = TrainConfigDefaults.apply(TrainArgumentParser.build().parse_args())
 
-    context = require_training_context(build_training_pipeline().handle(TrainingContext(args=args)))
-    observer = build_training_observer(context)
+    context = require_train_context(TrainPipelineFactory.build().run(TrainContext(args=args)))
+    observer = TrainObserverFactory.build(context)
 
-    train(context.model, context.graph, context.ppi_list, context.loss_fn, context.loss_asl,
-          context.optimizer, context.device,
-          context.result_file_path, context.save_path,
-          batch_size=args.batch_size, epochs=args.epochs, scheduler=context.scheduler,
-          got=args.graph_only_train, observer=observer)
+    GNNTrainer.train(context.model, context.graph, context.ppi_list, context.loss_fn, context.loss_asl,
+                     context.optimizer, context.device,
+                     context.result_file_path, context.save_path,
+                     batch_size=args.batch_size, epochs=args.epochs, scheduler=context.scheduler,
+                     got=args.graph_only_train, observer=observer)
 
 
 if __name__ == "__main__":

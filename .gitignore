@@ -6,8 +6,9 @@ __pycache__/
 .venv310/
 .vscode/
 
-data/
-pre_train_data/
-save_model/
+assets/data/
+assets/pretrained/
+outputs/
+downloads/
 
 *.zip
