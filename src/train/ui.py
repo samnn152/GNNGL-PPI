@@ -165,7 +165,10 @@ class TerminalTrainUI(TrainObserver):
             ("pretrained", args.pre_emb_path),
             ("index", args.train_valid_index_path),
             ("save", self.context.save_path),
+            ("feature source", args.feature_source),
             ("fusion", args.fusion_strategy),
+            ("loss", args.loss_type),
+            ("k-hop", args.subgraph_hops),
         ]
         if graph is not None:
             rows.extend([
@@ -194,9 +197,12 @@ class TerminalTrainUI(TrainObserver):
     def _fusion_alpha(self):
         model = getattr(self.context, "model", None)
         fusion = getattr(model, "global_local_fusion", None)
-        if fusion is None:
+        if fusion is None or not hasattr(fusion, "alpha"):
             return None
-        return float(fusion.alpha.detach().cpu())
+        alpha = fusion.alpha
+        if hasattr(alpha, "detach"):
+            alpha = alpha.detach().cpu()
+        return float(alpha)
 
     def _fusion_bar(self, width):
         alpha = self._fusion_alpha()

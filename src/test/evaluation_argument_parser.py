@@ -35,8 +35,19 @@ class EvaluationArgumentParser:
                             help='cnn_rnn and gnn unified train and valid ppi index')
         parser.add_argument('--gnn_model', default=None, type=str,
                             help="gnn trained model")
-        parser.add_argument('--fusion_strategy', default=None, choices=['dynamic', 'scalar'],
+        parser.add_argument('--fusion_strategy', default=None,
+                            choices=['fixed_sum', 'concat_mlp', 'scalar', 'dynamic', 'feature_wise'],
                             help='global/local fusion strategy used by the checkpoint')
+        parser.add_argument('--feature_source', default=None, choices=['global', 'local', 'both'],
+                            help='feature source used by the checkpoint')
+        parser.add_argument('--subgraph_hops', default=None, type=int,
+                            help='number of hops used for local subgraph extraction')
+        parser.add_argument('--loss_type', default=None, choices=['asl', 'bce'],
+                            help='loss used by the checkpoint; recorded in metrics CSV only')
+        parser.add_argument('--metrics_csv', default=None, type=str,
+                            help='CSV file where test results are appended')
+        parser.add_argument('--test_batch_size', default=None, type=int,
+                            help='edge batch size used during evaluation')
         parser.add_argument('--test_all', default='False', type=EvaluationBooleanArgument.parse,
                             help="test all or test separately")
         return parser

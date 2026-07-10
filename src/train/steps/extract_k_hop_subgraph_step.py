@@ -12,7 +12,7 @@ class ExtractKHopSubgraphStep(PipelineStep):
         subgraphs_nodes_mask, subgraphs_edges_mask, hop_indicator_dense = SubgraphExtractor.extract_subgraphs(
             graph.edge_index,
             graph.x.shape[0],
-            num_hops=1,
+            num_hops=context.args.subgraph_hops,
             walk_length=0,
             p=1,
             q=1,

@@ -59,7 +59,15 @@ class TrainConfigDefaults:
         if args.graph_only_train is None:
             args.graph_only_train = False
         if args.fusion_strategy is None:
-            args.fusion_strategy = 'dynamic'
+            args.fusion_strategy = 'feature_wise'
+        if args.feature_source is None:
+            args.feature_source = 'both'
+        if args.loss_type is None:
+            args.loss_type = 'asl'
+        if args.subgraph_hops is None:
+            args.subgraph_hops = 1
+        if args.metrics_csv is None:
+            args.metrics_csv = os.path.join(output_dir, 'proposal_results.csv')
         if args.batch_size is None:
             args.batch_size = 1024
         if args.epochs is None:

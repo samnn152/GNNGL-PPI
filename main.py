@@ -7,6 +7,7 @@ from src.train.context import TrainContext
 from src.train.steps import TrainPipelineFactory
 from src.train.trainer import GNNTrainer
 from src.train.ui import TrainObserverFactory
+from src.train.experiment_results import append_train_result
 
 # from tensorboardX import SummaryWriter
 
@@ -39,11 +40,12 @@ def main():
     context = require_train_context(TrainPipelineFactory.build().run(TrainContext(args=args)))
     observer = TrainObserverFactory.build(context)
 
-    GNNTrainer.train(context.model, context.graph, context.ppi_list, context.loss_fn, context.loss_asl,
-                     context.optimizer, context.device,
-                     context.result_file_path, context.save_path,
-                     batch_size=args.batch_size, epochs=args.epochs, scheduler=context.scheduler,
-                     got=args.graph_only_train, observer=observer)
+    final_stats = GNNTrainer.train(context.model, context.graph, context.ppi_list, context.loss_fn, context.loss_asl,
+                                   context.optimizer, context.device,
+                                   context.result_file_path, context.save_path,
+                                   batch_size=args.batch_size, epochs=args.epochs, scheduler=context.scheduler,
+                                   got=args.graph_only_train, observer=observer)
+    append_train_result(args.metrics_csv, args, final_stats)
 
 
 if __name__ == "__main__":

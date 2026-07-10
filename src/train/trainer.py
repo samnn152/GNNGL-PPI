@@ -1,6 +1,7 @@
 import math
 import os
 import random
+import time
 from dataclasses import dataclass
 
 import torch
@@ -205,15 +206,20 @@ class GNNTrainer:
 
         best_valid_f1 = 0.0
         best_valid_epoch = 0
+        final_train_stats = None
+        final_valid_stats = None
+        train_start_time = time.time()
 
         observer.on_train_start(context=None, total_epochs=epochs)
         for epoch in range(epochs):
             observer.on_epoch_start(epoch)
             train_stats = cls._train_epoch(model, graph, loss_asl, optimizer, device, batch_size, epoch, got, observer)
+            final_train_stats = train_stats
 
             cls._save_checkpoint(model, epoch, os.path.join(save_path, 'gnn_model_train.ckpt'), observer)
 
             valid_stats = cls._validate_epoch(model, graph, loss_asl, device, batch_size, observer)
+            final_valid_stats = valid_stats
 
             observer.on_phase("Scheduler", "Updating learning rate from train epoch loss")
             cls._step_scheduler(scheduler, train_stats.loss, epoch, result_file_path, observer)
@@ -246,3 +252,17 @@ class GNNTrainer:
             )
 
         observer.on_train_end()
+        train_time_seconds = time.time() - train_start_time
+        best_checkpoint_path = os.path.join(save_path, 'gnn_model_valid_best.ckpt')
+        model_size_mb = ''
+        if os.path.exists(best_checkpoint_path):
+            model_size_mb = os.path.getsize(best_checkpoint_path) / (1024 * 1024)
+        return {
+            'train': final_train_stats,
+            'valid': final_valid_stats,
+            'best_valid_f1': best_valid_f1,
+            'best_valid_epoch': best_valid_epoch,
+            'save_path': save_path,
+            'train_time_seconds': train_time_seconds,
+            'model_size_mb': model_size_mb,
+        }

@@ -55,7 +55,17 @@ class EvaluationConfigDefaults:
         if args.gnn_model is None:
             args.gnn_model = cls._default_model_path(mode, dataset_type, output_dir)
         if args.fusion_strategy is None:
-            args.fusion_strategy = 'dynamic'
+            args.fusion_strategy = 'feature_wise'
+        if args.feature_source is None:
+            args.feature_source = 'both'
+        if args.subgraph_hops is None:
+            args.subgraph_hops = 1
+        if args.loss_type is None:
+            args.loss_type = 'asl'
+        if args.metrics_csv is None:
+            args.metrics_csv = os.path.join(output_dir, 'proposal_results.csv')
+        if args.test_batch_size is None:
+            args.test_batch_size = 1024
 
         return args
 

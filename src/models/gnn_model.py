@@ -5,7 +5,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import JumpingKnowledge
 
-from src.models.fusion import DynamicGlobalLocalFusionNode, ScalarGlobalLocalFusionNode
+from src.models.fusion import (
+    ConcatMLPGlobalLocalFusionNode,
+    DynamicGlobalLocalFusionNode,
+    FeatureWiseGlobalLocalFusionNode,
+    FixedSumGlobalLocalFusionNode,
+    ScalarGlobalLocalFusionNode,
+)
 from src.models.gin import GINConv
 # from transformer import GotermEncoder
 
@@ -16,12 +22,14 @@ from src.models.subgraph_model import SubgraphGNNKernel
 class GNNGL_PPI(torch.nn.Module):
     def __init__(self, graph, gin_in_feature=256, num_layers=1,
                  hidden=512, use_jk=False, train_eps=True,
-                 feature_fusion=None, class_num=7, fusion_strategy='dynamic'):
+                 feature_fusion=None, class_num=7, fusion_strategy='feature_wise',
+                 feature_source='both'):
         super(GNNGL_PPI, self).__init__()
         self.graph = graph
         self.use_jk = use_jk
         self.train_eps = train_eps
         self.feature_fusion = feature_fusion
+        self.feature_source = feature_source
         # self.fc_dy = nn.Linear(512, 512)
         # self.uttransformer = UT_EncoderLayer(666, 666, 666, 666, num_heads=2)
         # self.transformer = EncoderLayer(d_model=666, d_inner=666, n_head=8, d_k=13, d_v=13)
@@ -95,10 +103,16 @@ class GNNGL_PPI(torch.nn.Module):
 
     @staticmethod
     def _build_global_local_fusion(fusion_strategy, hidden):
+        if fusion_strategy == 'fixed_sum':
+            return FixedSumGlobalLocalFusionNode()
+        if fusion_strategy == 'concat_mlp':
+            return ConcatMLPGlobalLocalFusionNode(hidden_size=hidden)
         if fusion_strategy == 'scalar':
             return ScalarGlobalLocalFusionNode(initial_alpha=0.5)
         if fusion_strategy == 'dynamic':
             return DynamicGlobalLocalFusionNode(hidden_size=hidden, initial_alpha=0.5)
+        if fusion_strategy == 'feature_wise':
+            return FeatureWiseGlobalLocalFusionNode(hidden_size=hidden, initial_alpha=0.5)
         raise ValueError("Unknown fusion strategy: {}".format(fusion_strategy))
 
     def reset_parameters(self):
@@ -142,7 +156,14 @@ class GNNGL_PPI(torch.nn.Module):
         x = F.dropout(x, p=p, training=self.training)
         x = self.lin2(x)
 
-        x = self.global_local_fusion(global_x=x, local_x=sub_x)
+        if self.feature_source == 'global':
+            x = x
+        elif self.feature_source == 'local':
+            x = sub_x
+        elif self.feature_source == 'both':
+            x = self.global_local_fusion(global_x=x, local_x=sub_x)
+        else:
+            raise ValueError("Unknown feature source: {}".format(self.feature_source))
 
         node_id = edge_index[:, train_edge_id]
         x1 = x[node_id[0]]

@@ -47,8 +47,17 @@ class TrainArgumentParser:
                             help='model save path')
         parser.add_argument('--graph_only_train', default=None, type=BooleanArgument.parse,
                             help='train ppi graph conctruct by train or all(train with test)')
-        parser.add_argument('--fusion_strategy', default=None, choices=['dynamic', 'scalar'],
+        parser.add_argument('--fusion_strategy', default=None,
+                            choices=['fixed_sum', 'concat_mlp', 'scalar', 'dynamic', 'feature_wise'],
                             help='global/local fusion strategy')
+        parser.add_argument('--feature_source', default=None, choices=['global', 'local', 'both'],
+                            help='use only the global branch, only the local branch, or both branches')
+        parser.add_argument('--loss_type', default=None, choices=['asl', 'bce'],
+                            help='training loss for multi-label classification')
+        parser.add_argument('--subgraph_hops', default=None, type=int,
+                            help='number of hops used for local subgraph extraction')
+        parser.add_argument('--metrics_csv', default=None, type=str,
+                            help='CSV file where train results are appended')
         parser.add_argument('--batch_size', default=None, type=int,
                             help="gnn train batch size, edge batch size")
         parser.add_argument('--epochs', default=None, type=int,

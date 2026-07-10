@@ -24,6 +24,7 @@ class BuildGNNGLModelTrainStep(PipelineStep):
             feature_fusion=None,
             class_num=7,
             fusion_strategy=args.fusion_strategy,
+            feature_source=args.feature_source,
         ).to(context.device)
 
         context.optimizer = torch.optim.Adam(context.model.parameters(), lr=0.001, weight_decay=5e-4)
@@ -45,4 +46,6 @@ class BuildGNNGLModelTrainStep(PipelineStep):
             clip=0.05,
             disable_torch_grad_focal_loss=True,
         ).to(context.device)
+        if args.loss_type == 'bce':
+            context.loss_asl = context.loss_fn
         return context

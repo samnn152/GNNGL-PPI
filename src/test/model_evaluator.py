@@ -14,44 +14,44 @@ from src.models.gnn_model import GNNGL_PPI
 
 class ModelEvaluator:
     @staticmethod
-    def test(model, graph, test_mask, device):
+    def test(model, graph, test_mask, device, batch_size=1024):
         valid_pre_result_list = []
         valid_label_list = []
         model.eval()
-        batch_size = 10
         valid_steps = math.ceil(len(test_mask) / batch_size)
 
-        for step in tqdm(range(valid_steps)):
-            if step == valid_steps - 1:
-                valid_edge_id = test_mask[step * batch_size:]
-            else:
-                valid_edge_id = test_mask[step * batch_size: step * batch_size + batch_size]
+        with torch.no_grad():
+            for step in tqdm(range(valid_steps)):
+                if step == valid_steps - 1:
+                    valid_edge_id = test_mask[step * batch_size:]
+                else:
+                    valid_edge_id = test_mask[step * batch_size: step * batch_size + batch_size]
 
-            output = model(graph.x, graph.edge_index, valid_edge_id, graph.edge_attr, graph)
-            label = graph.edge_attr_1[valid_edge_id]
-            label = label.type(torch.FloatTensor).to(device)
-            pre_result = (nn.Sigmoid()(output) > 0.5).type(torch.FloatTensor).to(device)
+                output = model(graph.x, graph.edge_index, valid_edge_id, graph.edge_attr, graph)
+                label = graph.edge_attr_1[valid_edge_id]
+                label = label.type(torch.FloatTensor).to(device)
+                pre_result = (nn.Sigmoid()(output) > 0.5).type(torch.FloatTensor).to(device)
 
-            valid_pre_result_list.append(pre_result.cpu().data)
-            valid_label_list.append(label.cpu().data)
+                valid_pre_result_list.append(pre_result.cpu().data)
+                valid_label_list.append(label.cpu().data)
 
         valid_pre_result_list = torch.cat(valid_pre_result_list, dim=0)
         valid_label_list = torch.cat(valid_label_list, dim=0)
         metrics = Metrictor_PPI(valid_pre_result_list, valid_label_list)
         metrics.show_result()
         print("Recall: {}, Precision: {}, F1: {}".format(metrics.Recall, metrics.Precision, metrics.F1))
-        return valid_pre_result_list
+        return metrics
 
     @classmethod
     def run(cls, args):
         cls._validate_paths(args)
         ppi_data = cls._load_ppi_data(args)
-        graph = cls._build_graph(ppi_data)
+        graph = cls._build_graph(ppi_data, args)
         ppi_list = cls._edge_list(graph)
         cls._attach_masks(graph, ppi_list, args.index_path)
-        model, device = cls._load_model(graph, args.gnn_model, args.fusion_strategy)
+        model, device = cls._load_model(graph, args.gnn_model, args.fusion_strategy, args.feature_source)
         graph.to(device)
-        cls._print_results(model, graph, device, args.test_all)
+        return cls._print_results(model, graph, device, args.test_all, args.test_batch_size)
 
     @staticmethod
     def _validate_paths(args):
@@ -71,12 +71,12 @@ class ModelEvaluator:
         return ppi_data
 
     @staticmethod
-    def _build_graph(ppi_data):
+    def _build_graph(ppi_data, args):
         graph = SubgraphsData(**ppi_data.data.to_dict())
         subgraphs_nodes_mask, subgraphs_edges_mask, hop_indicator_dense = SubgraphExtractor.extract_subgraphs(
             graph.edge_index,
             graph.x.shape[0],
-            num_hops=1,
+            num_hops=args.subgraph_hops,
             walk_length=0,
             p=1,
             q=1,
@@ -170,7 +170,7 @@ class ModelEvaluator:
         return test1_mask, test2_mask, test3_mask
 
     @staticmethod
-    def _load_model(graph, model_path, fusion_strategy):
+    def _load_model(graph, model_path, fusion_strategy, feature_source):
         device = torch.device('cpu')
         model = GNNGL_PPI(
             graph,
@@ -182,6 +182,7 @@ class ModelEvaluator:
             feature_fusion=None,
             class_num=7,
             fusion_strategy=fusion_strategy,
+            feature_source=feature_source,
         ).to(device)
         checkpoint = torch.load(model_path, map_location=torch.device('cpu'))['state_dict']
         try:
@@ -199,18 +200,20 @@ class ModelEvaluator:
         return model, device
 
     @classmethod
-    def _print_results(cls, model, graph, device, test_all):
+    def _print_results(cls, model, graph, device, test_all, batch_size):
+        results = {}
         if test_all:
             print("---------------- valid-test-all result --------------------")
-            cls.test(model, graph, graph.val_mask, device)
-            return
+            results['test_all'] = cls.test(model, graph, graph.val_mask, device, batch_size=batch_size)
+            return results
 
         print("---------------- valid-test1 result --------------------")
         if len(graph.test1_mask) > 0:
-            cls.test(model, graph, graph.test1_mask, device)
+            results['test1'] = cls.test(model, graph, graph.test1_mask, device, batch_size=batch_size)
         print("---------------- valid-test2 result --------------------")
         if len(graph.test2_mask) > 0:
-            cls.test(model, graph, graph.test2_mask, device)
+            results['test2'] = cls.test(model, graph, graph.test2_mask, device, batch_size=batch_size)
         print("---------------- valid-test3 result --------------------")
         if len(graph.test3_mask) > 0:
-            cls.test(model, graph, graph.test3_mask, device)
+            results['test3'] = cls.test(model, graph, graph.test3_mask, device, batch_size=batch_size)
+        return results
