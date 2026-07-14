@@ -1,1 +1,1 @@
-from src.test.evaluator import EvaluationCLI
+"""Evaluation feature organized by Clean Architecture boundaries."""

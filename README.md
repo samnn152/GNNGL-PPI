@@ -26,7 +26,7 @@ This repository contains:
     (9) scikit-learn-0.22.2
 ### Data Processing
 
-The dataset processing code lives in `src/datasets/gnn_data.py` (`GNN_DATA`). This package is responsible for turning raw input files into trainable graph data:
+The shared dataset processing code lives in `src/common/data/datasets/gnn_data.py` (`GNN_DATA`). This package is responsible for turning raw input files into trainable graph data:
 
 - PPI network reading (`__init__`)
 - protein sequence and MASSA feature preparation (`get_feature_pretrained`)
@@ -35,7 +35,7 @@ The dataset processing code lives in `src/datasets/gnn_data.py` (`GNN_DATA`). Th
 - Random/BFS/DFS train-test partitioning (`split_dataset`)
     - For the first time, you need to set the parameter random_new=True to generate a new data set division json file. (Otherwise, an error will be reported, No such file or directory: "./xxxx/string.bfs.fold1.json")
 
-`assets/data/` contains raw input files. `src/datasets/` contains Python code that parses and transforms those files.
+`assets/data/` contains raw input files. `src/common/data/datasets/` contains Python code that parses and transforms those files.
 
 ### Train
 
@@ -66,7 +66,22 @@ python main.py \
 
 Individual files can still be overridden with `--ppi_path`, `--pseq_path`, `--vec_path`, `--pre_emb_path`, `--train_valid_index_path`, and `--save_path`.
 
-Global/local fusion is selected with `--fusion_strategy dynamic` or `--fusion_strategy scalar`. Dynamic gated fusion is the default; use `scalar` when loading older scalar-fusion checkpoints.
+Global/local fusion is selected with `--fusion_strategy`. For the large STRING
+`all_connected` graph, the pipeline automatically uses the scalable sparse local
+encoder and encodes nodes once per epoch:
+
+```bash
+python main.py \
+  --dataset_type string \
+  --feature_source both \
+  --local_encoder sparse \
+  --batch_size 8192
+```
+
+SHS datasets keep the original ego-subgraph encoder. Its memory is bounded with
+`--max_subgraph_nodes` and `--max_subgraph_edges`; use `0` for either option only
+when an exact, unbounded subgraph is known to fit in memory. Training and testing
+must use the same `--local_encoder` and subgraph limits as the checkpoint.
 
 Test entrypoint:
 
@@ -84,7 +99,7 @@ Architecture:
 The MASSA GNN-PPI pretrained embeddings can be prepared with:
 
 ```bash
-python -m src.pretrain.massa
+python -m src.common.data.pretrained.massa
 ```
 
 This installs `assets/pretrained/shs_MASSA.pickle`, which is used by default.

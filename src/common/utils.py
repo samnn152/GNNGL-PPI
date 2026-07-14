@@ -1,180 +1,137 @@
+from __future__ import annotations
+
 import random
+
+from torch import Tensor
 
 
 class ConsoleLogger:
     @staticmethod
-    def print_file(str_, save_file_path=None):
-        print(str_)
+    def print_file(message: object, save_file_path: str | None = None) -> None:
+        print(message)
         if save_file_path is not None:
-            with open(save_file_path, 'a') as f:
-                print(str_, file=f)
+            with open(save_file_path, 'a') as file:
+                print(message, file=file)
 
 
 class Metrictor_PPI:
-    def __init__(self, pre_y, truth_y, is_binary=False):
-        self.TP = 0
-        self.FP = 0
-        self.TN = 0
-        self.FN = 0
-
-        if is_binary:
-            length = pre_y.shape[0]
-            for i in range(length):
-                if pre_y[i] == truth_y[i]:
-                    if truth_y[i] == 1:
-                        self.TP += 1
-                    else:
-                        self.TN += 1
-                elif truth_y[i] == 1:
-                    self.FN += 1
-                elif pre_y[i] == 1:
-                    self.FP += 1
-            self.num = length
-
-        else:
-            N, C = pre_y.shape
-            for i in range(N):
-                for j in range(C):
-                    if pre_y[i][j] == truth_y[i][j]:
-                        if truth_y[i][j] == 1:
-                            self.TP += 1
-                        else:
-                            self.TN += 1
-                    elif truth_y[i][j] == 1:
-                        self.FN += 1
-                    elif truth_y[i][j] == 0:
-                        self.FP += 1
-            self.num = N * C
-
-    def show_result(self, is_print=False, file=None):
+    def __init__(self, prediction: Tensor, truth: Tensor, is_binary: bool = False) -> None:
+        del is_binary  # Both legacy branches flatten identically.
+        prediction = prediction.reshape(-1)
+        truth = truth.reshape(-1)
+        matches = prediction == truth
+        positives = truth == 1
+        predicted_positives = prediction == 1
+        self.TP = int((matches & positives).sum().item())
+        self.TN = int((matches & ~positives).sum().item())
+        self.FN = int((~matches & positives).sum().item())
+        self.FP = int((~matches & predicted_positives).sum().item())
+        self.num = int(truth.numel())
         self.Accuracy = (self.TP + self.TN) / (self.num + 1e-10)
         self.Precision = self.TP / (self.TP + self.FP + 1e-10)
         self.Recall = self.TP / (self.TP + self.FN + 1e-10)
         self.F1 = 2 * self.Precision * self.Recall / (self.Precision + self.Recall + 1e-10)
-        if is_print:
-            ConsoleLogger.print_file("Accuracy: {}".format(self.Accuracy), file)
-            ConsoleLogger.print_file("Precision: {}".format(self.Precision), file)
-            ConsoleLogger.print_file("Recall: {}".format(self.Recall), file)
-            ConsoleLogger.print_file("F1-Score: {}".format(self.F1), file)
+
+    def show_result(self, is_print: bool = False, file: str | None = None) -> None:
+        if not is_print:
+            return
+        ConsoleLogger.print_file(f"Accuracy: {self.Accuracy}", file)
+        ConsoleLogger.print_file(f"Precision: {self.Precision}", file)
+        ConsoleLogger.print_file(f"Recall: {self.Recall}", file)
+        ConsoleLogger.print_file(f"F1-Score: {self.F1}", file)
 
 
-class UnionFindSet(object):
-    print('===============UnionFindSet===============')
+class UnionFindSet:
+    def __init__(self, member_count: int) -> None:
+        self.roots = list(range(member_count))
+        self.rank = [0] * member_count
+        self.count = member_count
 
-    def __init__(self, m):
-        # m, n = len(grid), len(grid[0])
-        # print(m, '======================')   5189
-        self.roots = [i for i in range(m)]
-        self.rank = [0 for i in range(m)]
-        self.count = m
-
-        for i in range(m):
-            self.roots[i] = i
-
-
-    def find(self, member):
-        tmp = []
+    def find(self, member: int) -> int:
+        path: list[int] = []
         while member != self.roots[member]:
-            tmp.append(member)
+            path.append(member)
             member = self.roots[member]
-        for root in tmp:
+        for root in path:
             self.roots[root] = member
         return member
 
-    def union(self, p, q):
-
-        # print(p)
-        # print(q)
-        # 蛋白质对的index
-        parentP = self.find(p)
-        parentQ = self.find(q)
-        # print(parentP)  5188
-        # print(parentQ)  5188
-
-        if parentP != parentQ:
-            if self.rank[parentP] > self.rank[parentQ]:
-                self.roots[parentQ] = parentP
-            elif self.rank[parentP] < self.rank[parentQ]:
-                self.roots[parentP] = parentQ
-            else:
-                self.roots[parentQ] = parentP
-                self.rank[parentP] -= 1
-            self.count -= 1
+    def union(self, first: int, second: int) -> None:
+        first_root = self.find(first)
+        second_root = self.find(second)
+        if first_root == second_root:
+            return
+        if self.rank[first_root] > self.rank[second_root]:
+            self.roots[second_root] = first_root
+        elif self.rank[first_root] < self.rank[second_root]:
+            self.roots[first_root] = second_root
+        else:
+            self.roots[second_root] = first_root
+            self.rank[first_root] -= 1
+        self.count -= 1
 
 
 class GraphSplitSampler:
     @staticmethod
-    def get_bfs_sub_graph(ppi_list, node_num, node_to_edge_index, sub_graph_size):
-        candiate_node = []
-        selected_edge_index = []
-        selected_node = []
-
+    def get_bfs_sub_graph(
+        ppi_list: list[list[int]],
+        node_num: int,
+        node_to_edge_index: dict[int, list[int]],
+        sub_graph_size: int,
+    ) -> list[int]:
+        candidate_nodes: list[int] = []
+        selected_edges: list[int] = []
+        selected_nodes: list[int] = []
         random_node = random.randint(0, node_num - 1)
         while len(node_to_edge_index[random_node]) > 5:
             random_node = random.randint(0, node_num - 1)
-        candiate_node.append(random_node)
-
-        while len(selected_edge_index) < sub_graph_size:
-            cur_node = candiate_node.pop(0)
-            selected_node.append(cur_node)
-            for edge_index in node_to_edge_index[cur_node]:
-
-                if edge_index not in selected_edge_index:
-                    selected_edge_index.append(edge_index)
-
-                    end_node = -1
-                    if ppi_list[edge_index][0] == cur_node:
-                        end_node = ppi_list[edge_index][1]
-                    else:
-                        end_node = ppi_list[edge_index][0]
-
-                    if end_node not in selected_node and end_node not in candiate_node:
-                        candiate_node.append(end_node)
-                else:
+        candidate_nodes.append(random_node)
+        while len(selected_edges) < sub_graph_size and candidate_nodes:
+            current_node = candidate_nodes.pop(0)
+            selected_nodes.append(current_node)
+            for edge_index in node_to_edge_index[current_node]:
+                if edge_index in selected_edges:
                     continue
-            # print(len(selected_edge_index), len(candiate_node))
-        node_list = candiate_node + selected_node
-        # print(len(node_list), len(selected_edge_index))
-        return selected_edge_index
+                selected_edges.append(edge_index)
+                source, target = ppi_list[edge_index]
+                end_node = target if source == current_node else source
+                if end_node not in selected_nodes and end_node not in candidate_nodes:
+                    candidate_nodes.append(end_node)
+        return selected_edges
 
     @staticmethod
-    def get_dfs_sub_graph(ppi_list, node_num, node_to_edge_index, sub_graph_size):
-        stack = []
-        selected_edge_index = []
-        selected_node = []
-
+    def get_dfs_sub_graph(
+        ppi_list: list[list[int]],
+        node_num: int,
+        node_to_edge_index: dict[int, list[int]],
+        sub_graph_size: int,
+    ) -> list[int]:
+        stack: list[int] = []
+        selected_edges: list[int] = []
+        selected_nodes: list[int] = []
         random_node = random.randint(0, node_num - 1)
         while len(node_to_edge_index[random_node]) > 5:
             random_node = random.randint(0, node_num - 1)
         stack.append(random_node)
-
-        while len(selected_edge_index) < sub_graph_size:
-            # print(len(selected_edge_index), len(stack), len(selected_node))
-            cur_node = stack[-1]
-            if cur_node in selected_node:
-                flag = True
-                for edge_index in node_to_edge_index[cur_node]:
-                    if flag:
-                        end_node = -1
-                        if ppi_list[edge_index][0] == cur_node:
-                            end_node = ppi_list[edge_index][1]
-                        else:
-                            end_node = ppi_list[edge_index][0]
-
-                        if end_node in selected_node:
-                            continue
-                        else:
-                            stack.append(end_node)
-                            flag = False
-                    else:
+        while len(selected_edges) < sub_graph_size and stack:
+            current_node = stack[-1]
+            if current_node in selected_nodes:
+                next_nodes: list[int] = []
+                for edge_index in node_to_edge_index[current_node]:
+                    source, target = ppi_list[edge_index]
+                    end_node = target if source == current_node else source
+                    if end_node not in selected_nodes:
+                        next_nodes.append(end_node)
                         break
-                if flag:
+                if next_nodes:
+                    stack.extend(next_nodes)
+                else:
                     stack.pop()
                 continue
-            else:
-                selected_node.append(cur_node)
-                for edge_index in node_to_edge_index[cur_node]:
-                    if edge_index not in selected_edge_index:
-                        selected_edge_index.append(edge_index)
-
-        return selected_edge_index
+            selected_nodes.append(current_node)
+            selected_edges.extend(
+                edge_index
+                for edge_index in node_to_edge_index[current_node]
+                if edge_index not in selected_edges
+            )
+        return selected_edges[:sub_graph_size]

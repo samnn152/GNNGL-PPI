@@ -1,9 +1,9 @@
-from src.test.evaluator import EvaluationCLI
+from src.test.controllers.evaluation_controller import EvaluationCLI
 
 
 class MainTestCLI:
     @staticmethod
-    def run():
+    def run() -> None:
         EvaluationCLI.run()
 
 

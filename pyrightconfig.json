@@ -4,13 +4,18 @@
   "extraPaths": [
     "."
   ],
-  "typeCheckingMode": "basic",
-  "reportOptionalMemberAccess": "none",
-  "reportPossiblyUnboundVariable": "none",
-  "reportAttributeAccessIssue": "none",
-  "reportArgumentType": "none",
-  "reportCallIssue": "none",
-  "reportIncompatibleMethodOverride": "none",
-  "reportRedeclaration": "none",
-  "reportReturnType": "none"
+  "include": [
+    "src",
+    "tests",
+    "main.py",
+    "main_test.py"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".venv310",
+    "assets",
+    "outputs"
+  ],
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.10"
 }

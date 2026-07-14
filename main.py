@@ -1,51 +1,42 @@
-import numpy as np
-import torch
+# pyright: reportUnknownMemberType=false
+"""Command-line entry point for training GNNGL-PPI models.
 
-from src.train.args import TrainArgumentParser
-from src.train.train_config_defaults import TrainConfigDefaults
-from src.train.context import TrainContext
-from src.train.steps import TrainPipelineFactory
-from src.train.trainer import GNNTrainer
-from src.train.ui import TrainObserverFactory
-from src.train.experiment_results import append_train_result
+This module reads command-line arguments, resolves them into a typed training
+configuration, prepares the dataset and model dependencies, runs the training
+loop, and appends the final metrics to the configured CSV file.
 
-# from tensorboardX import SummaryWriter
+Run training from the repository root with::
 
-np.random.seed(1)
-torch.manual_seed(1)
-torch.cuda.manual_seed(1)
+    python main.py
 
+Inspect all available options with::
 
-def require_train_context(context):
-    required_fields = [
-        "model",
-        "graph",
-        "ppi_list",
-        "loss_fn",
-        "loss_asl",
-        "optimizer",
-        "device",
-        "result_file_path",
-        "save_path",
-    ]
-    missing_fields = [field for field in required_fields if getattr(context, field) is None]
-    if missing_fields:
-        raise RuntimeError("Train pipeline missing fields: {}".format(", ".join(missing_fields)))
-    return context
+    python main.py --help
+
+For example, train the SHS148K dataset with the global and sparse-local
+branches on Apple Silicon with::
+
+    python main.py --dataset_type shs148k --feature_source both --local_encoder sparse --device mps
+
+Use ``--device cuda`` on a CUDA machine or ``--device auto`` to select the
+best available backend automatically. Dataset paths, output paths, epoch
+count, batch size, and other experiment options can be overridden through the
+arguments documented by ``python main.py --help``.
+"""
+
+from src.train.controllers.train_controller import run_training
 
 
-def main():
-    args = TrainConfigDefaults.apply(TrainArgumentParser.build().parse_args())
+def main() -> None:
+    """Prepare and execute one training run.
 
-    context = require_train_context(TrainPipelineFactory.build().run(TrainContext(args=args)))
-    observer = TrainObserverFactory.build(context)
-
-    final_stats = GNNTrainer.train(context.model, context.graph, context.ppi_list, context.loss_fn, context.loss_asl,
-                                   context.optimizer, context.device,
-                                   context.result_file_path, context.save_path,
-                                   batch_size=args.batch_size, epochs=args.epochs, scheduler=context.scheduler,
-                                   got=args.graph_only_train, observer=observer)
-    append_train_result(args.metrics_csv, args, final_stats)
+    The setup pipeline loads features, builds the graph, partitions the data,
+    creates the model and optimizer, and prepares output paths. The resulting
+    context is converted into a ``TrainingSession`` and ``TrainOptions`` before
+    ``GNNTrainer.train`` starts the epoch loop. Final metrics are appended to
+    the configured experiment-results CSV file.
+    """
+    run_training()
 
 
 if __name__ == "__main__":
