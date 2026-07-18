@@ -16,6 +16,8 @@ class PartitionDatasetStep(PipelineStep):
             print("use {} method to split".format(context.args.split_mode))
         context.require_ppi_data().split_dataset(DatasetSplitConfig(
             index_path=context.args.train_valid_index_path,
+            validation_size=context.args.validation_size,
+            test_size=context.args.test_size,
             regenerate=context.args.split_new,
             mode=context.args.split_mode,
         ))

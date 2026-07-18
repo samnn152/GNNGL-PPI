@@ -34,6 +34,8 @@ class TrainConfig:
     pro_go_def_path: str | None
     split_new: bool
     split_mode: SplitMode
+    validation_size: float
+    test_size: float
     train_valid_index_path: str
     use_lr_scheduler: bool
     save_path: str

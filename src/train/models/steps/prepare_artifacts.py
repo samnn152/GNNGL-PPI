@@ -29,8 +29,9 @@ class PrepareTrainArtifactsStep(PipelineStep):
                 f.write("{} = {}".format(key, args_dict[key]))
                 f.write('\n')
             f.write('\n')
-            f.write("train gnn, train_num: {}, valid_num: {}".format(
+            f.write("train gnn, train_num: {}, valid_num: {}, test_num: {}".format(
                 len(graph.train_mask),
                 len(graph.val_mask),
+                len(graph.test_mask),
             ))
         return context

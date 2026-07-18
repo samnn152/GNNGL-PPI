@@ -12,6 +12,7 @@ SplitMode = Literal['random', 'bfs', 'dfs']
 class DatasetSplit(TypedDict):
     train_index: list[int]
     valid_index: list[int]
+    test_index: list[int]
 
 
 class ParsedPPINetwork(TypedDict):
@@ -40,6 +41,7 @@ class GNNDataConfig:
 @dataclass(frozen=True, slots=True)
 class DatasetSplitConfig:
     index_path: str
-    test_size: float = 0.2
+    validation_size: float = 0.2
+    test_size: float = 0.0
     regenerate: bool = False
     mode: SplitMode = 'random'

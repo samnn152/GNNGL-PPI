@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from src.common.utils import Metrictor_PPI
 from src.common.device import DeviceResolver
-from src.common.models.configuration.data import DatasetSplit, GNNDataConfig
+from src.common.models.configuration.data import GNNDataConfig
 from src.common.data.datasets.gnn_data import GNN_DATA
 from src.common.models.configuration.graph import SparseSubgraphConfig
 from src.common.models.ppi_graph import PPIGraph
@@ -139,9 +139,10 @@ class ModelEvaluator:
     @classmethod
     def _attach_masks(cls, graph: PPIGraph, ppi_list: list[list[int]], index_path: str) -> None:
         with open(index_path, 'r') as file:
-            index_dict = cast(DatasetSplit, json.load(file))
+            index_dict = cast(dict[str, list[int]], json.load(file))
         graph.train_mask = index_dict['train_index']
         graph.val_mask = index_dict['valid_index']
+        graph.test_mask = index_dict.get('test_index', graph.val_mask)
         node_visibility = cls._node_visibility(graph, ppi_list)
         cls._print_visibility_counts(node_visibility)
         graph.test1_mask, graph.test2_mask, graph.test3_mask = cls._split_test_masks(
@@ -154,7 +155,7 @@ class ModelEvaluator:
         for index in graph.train_mask:
             for node in ppi_list[index]:
                 visibility[node] = 1
-        for index in graph.val_mask:
+        for index in graph.test_mask:
             for node in ppi_list[index]:
                 visibility.setdefault(node, 0)
         return visibility
@@ -172,7 +173,7 @@ class ModelEvaluator:
         node_visibility: Mapping[int, int],
     ) -> tuple[list[int], list[int], list[int]]:
         masks: tuple[list[int], list[int], list[int]] = ([], [], [])
-        for index in graph.val_mask:
+        for index in graph.test_mask:
             source, target = ppi_list[index]
             visibility = node_visibility[source] + node_visibility[target]
             masks[2 - visibility].append(index)
@@ -199,7 +200,7 @@ class ModelEvaluator:
         test_all: bool,
     ) -> dict[str, Metrictor_PPI]:
         if test_all:
-            return {'test_all': cls.test(session, session.graph.val_mask)}
+            return {'test_all': cls.test(session, session.graph.test_mask)}
         results: dict[str, Metrictor_PPI] = {}
         for name, mask in (
             ('test1', session.graph.test1_mask),

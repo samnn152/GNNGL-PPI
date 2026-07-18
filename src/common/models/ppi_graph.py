@@ -21,6 +21,7 @@ class PPIGraph(Data):
     train_mask: list[int]
     train_mask_got: list[int]
     val_mask: list[int]
+    test_mask: list[int]
     test1_mask: list[int]
     test2_mask: list[int]
     test3_mask: list[int]

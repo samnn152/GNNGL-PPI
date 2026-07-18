@@ -50,7 +50,11 @@ class GNN_DATA:
         self.dim = 0
         self.pvec_dict: dict[str, FloatArray] = {}
         self.pretrained_emb_dict: dict[str, FloatArray] = {}
-        self.ppi_split_dict: DatasetSplit = {'train_index': [], 'valid_index': []}
+        self.ppi_split_dict: DatasetSplit = {
+            'train_index': [],
+            'valid_index': [],
+            'test_index': [],
+        }
         self.data: PPIGraph
         self.ufs: UnionFindSet
         self.edge_index: Tensor

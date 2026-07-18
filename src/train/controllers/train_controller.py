@@ -1,6 +1,8 @@
 # pyright: reportUnknownMemberType=false
 """MVC controller for one GNNGL-PPI training run."""
 
+import random
+
 import numpy as np
 import torch
 
@@ -19,6 +21,7 @@ from src.train.views import TrainObserverFactory
 
 def run_training() -> None:
     """Resolve CLI input, prepare dependencies, train, and persist metrics."""
+    random.seed(1)
     np.random.seed(1)
     torch.manual_seed(1)
     config = TrainConfigDefaults.apply(TrainArgumentParser.build().parse_args())

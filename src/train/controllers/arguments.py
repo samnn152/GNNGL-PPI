@@ -53,6 +53,10 @@ class TrainArgumentParser:
                             help='regenerate split index files (default: enabled)')
         parser.add_argument('--split_mode', default=None, choices=['random', 'bfs', 'dfs'],
                             help='split method, random, bfs or dfs')
+        parser.add_argument('--validation_size', default=None, type=float,
+                            help='fraction reserved for validation edges; default: 0.2')
+        parser.add_argument('--test_size', default=None, type=float,
+                            help='fraction reserved for independent test edges; default: 0')
         parser.add_argument('--train_valid_index_path', default=None, type=str,
                             help='cnn_rnn and gnn unified train and valid ppi index')
         parser.add_argument('--use-lr-scheduler', '--use_lr_scheduler', dest='use_lr_scheduler', default=True,

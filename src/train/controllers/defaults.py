@@ -64,6 +64,10 @@ class TrainConfigDefaults:
         loss_type = cast(LossType, args.loss_type or 'asl')
         device = cast(DeviceName, args.device or 'auto')
         split_mode = cast(SplitMode, args.split_mode or mode)
+        validation_size = float(args.validation_size) if args.validation_size is not None else 0.2
+        test_size = float(args.test_size) if args.test_size is not None else 0.0
+        if validation_size < 0 or test_size < 0 or validation_size + test_size >= 1:
+            raise ValueError("validation_size and test_size must be non-negative and sum to less than 1")
 
         return TrainConfig(
             dataset_type=dataset_type,
@@ -82,6 +86,8 @@ class TrainConfigDefaults:
             pro_go_def_path=args.pro_go_def_path,
             split_new=bool(args.split_new),
             split_mode=split_mode,
+            validation_size=validation_size,
+            test_size=test_size,
             train_valid_index_path=args.train_valid_index_path
             or os.path.join(index_dir, '{}.{}.fold1.json'.format(dataset_type, mode)),
             use_lr_scheduler=bool(args.use_lr_scheduler),

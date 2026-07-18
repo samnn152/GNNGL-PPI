@@ -33,10 +33,14 @@ class DatasetSplitter:
         directed_edge_count = edge_num // 2
         edge_indices = list(range(directed_edge_count))
         random.shuffle(edge_indices)
-        split_index = int(directed_edge_count * (1 - config.test_size))
+        validation_count = int(directed_edge_count * config.validation_size)
+        test_count = int(directed_edge_count * config.test_size)
+        train_count = directed_edge_count - validation_count - test_count
+        validation_end = train_count + validation_count
         split_dict: DatasetSplit = {
-            'train_index': edge_indices[:split_index],
-            'valid_index': edge_indices[split_index:],
+            'train_index': edge_indices[:train_count],
+            'valid_index': edge_indices[train_count:validation_end],
+            'test_index': edge_indices[validation_end:],
         }
         DatasetSplitter._write_split(config.index_path, split_dict)
         return split_dict
@@ -47,9 +51,11 @@ class DatasetSplitter:
         edge_num: int,
         config: DatasetSplitConfig,
     ) -> DatasetSplit:
+        if config.test_size > 0:
+            raise ValueError("Three-way splitting currently supports random mode only")
         directed_edge_count = edge_num // 2
         node_to_edge_index = DatasetSplitter._node_to_edge_index(ppi_list, directed_edge_count)
-        sub_graph_size = int(directed_edge_count * config.test_size)
+        sub_graph_size = int(directed_edge_count * config.validation_size)
         if config.mode == 'bfs':
             selected_edge_index = GraphSplitSampler.get_bfs_sub_graph(
                 ppi_list, len(node_to_edge_index), node_to_edge_index, sub_graph_size
@@ -63,6 +69,7 @@ class DatasetSplitter:
         split_dict: DatasetSplit = {
             'train_index': unselected_edge_index,
             'valid_index': selected_edge_index,
+            'test_index': [],
         }
         DatasetSplitter._write_split(config.index_path, split_dict)
         return split_dict

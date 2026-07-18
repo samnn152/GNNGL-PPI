@@ -16,8 +16,11 @@ class AttachTrainTestEdgeMasksStep(PipelineStep):
 
         graph.train_mask = ppi_data.ppi_split_dict['train_index']
         graph.val_mask = ppi_data.ppi_split_dict['valid_index']
+        graph.test_mask = ppi_data.ppi_split_dict.get('test_index', [])
 
-        print("train gnn, train_num: {}, valid_num: {}".format(len(graph.train_mask), len(graph.val_mask)))
+        print("train gnn, train_num: {}, valid_num: {}, test_num: {}".format(
+            len(graph.train_mask), len(graph.val_mask), len(graph.test_mask)
+        ))
 
         graph.edge_index_got = torch.cat(
             (graph.edge_index[:, graph.train_mask], graph.edge_index[:, graph.train_mask][[1, 0]]), dim=1)

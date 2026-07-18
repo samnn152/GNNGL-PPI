@@ -6,8 +6,9 @@ import torch
 
 from src.train.models import GNNTrainer, TrainOptions, TrainingSession
 from src.common.data.datasets.gnn_data import GNN_DATA
+from src.common.data.datasets.splitting.splitter import DatasetSplitter
 from src.common.data.graph.subgraph import SubgraphExtractor
-from src.common.models.configuration.data import GNNDataConfig
+from src.common.models.configuration.data import DatasetSplitConfig, GNNDataConfig
 from src.common.models.configuration.graph import SparseSubgraphConfig
 from src.common.models.configuration.gnn import EdgePredictionBatch, GNNModelConfig
 from src.common.models.ppi_graph import PPIGraph
@@ -109,6 +110,26 @@ class SparseSubgraphExtractionTest(unittest.TestCase):
         self.assertEqual(combined.shape[1], edges[1].numel())
         self.assertGreaterEqual(int(combined.min()), 0)
         self.assertLess(int(combined.max()), nodes[1].numel())
+
+
+class DatasetSplitRatioTest(unittest.TestCase):
+    def test_random_split_supports_separate_70_15_15_partitions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            split = DatasetSplitter.split(
+                ppi_list=[],
+                edge_num=40,
+                config=DatasetSplitConfig(
+                    index_path=str(Path(directory) / 'split.json'),
+                    validation_size=0.15,
+                    test_size=0.15,
+                    regenerate=True,
+                    mode='random',
+                ),
+            )
+
+        self.assertEqual(len(split['train_index']), 14)
+        self.assertEqual(len(split['valid_index']), 3)
+        self.assertEqual(len(split['test_index']), 3)
 
 
 class EncodeOnceTrainerTest(unittest.TestCase):
