@@ -12,6 +12,7 @@ class Identity(nn.Module):
     """No-op module used where a configurable transform or norm is disabled."""
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        """Accept arbitrary construction arguments for drop-in module compatibility."""
         super().__init__()
 
     def forward(self, value: Tensor) -> Tensor:

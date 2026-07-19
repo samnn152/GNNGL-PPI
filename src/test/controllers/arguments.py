@@ -6,8 +6,11 @@ from src.test.controllers.boolean import EvaluationBooleanArgument
 
 
 class EvaluationArgumentParser:
+    """Build the command-line boundary for checkpoint evaluation requests."""
+
     @staticmethod
     def build() -> argparse.ArgumentParser:
+        """Return an argument parser containing all supported evaluation options."""
         parser = argparse.ArgumentParser(description='Test Model')
         parser.add_argument('--dataset_type', default='shs27k', choices=['shs27k', 'shs148k', 'string'],
                             help='dataset preset')

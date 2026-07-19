@@ -10,12 +10,14 @@ SplitMode = Literal['random', 'bfs', 'dfs']
 
 
 class DatasetSplit(TypedDict):
+    """Persisted edge indices for train, validation, and test partitions."""
     train_index: list[int]
     valid_index: list[int]
     test_index: list[int]
 
 
 class ParsedPPINetwork(TypedDict):
+    """Indexed interaction data produced by the PPI parser."""
     ppi_list: list[list[int]]
     origin_ppi_list: list[list[str]]
     ppi_dict: dict[str, int]
@@ -27,6 +29,7 @@ class ParsedPPINetwork(TypedDict):
 
 @dataclass(frozen=True, slots=True)
 class GNNDataConfig:
+    """Immutable input-file and parsing options for PPI data preparation."""
     ppi_path: str
     exclude_protein_path: str | None = None
     max_sequence_length: int = 2000
@@ -40,6 +43,7 @@ class GNNDataConfig:
 
 @dataclass(frozen=True, slots=True)
 class DatasetSplitConfig:
+    """Immutable options controlling edge partition loading or generation."""
     index_path: str
     validation_size: float = 0.2
     test_size: float = 0.0

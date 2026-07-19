@@ -6,7 +6,10 @@ from pathlib import Path
 
 
 class StepLayoutTest(unittest.TestCase):
+    """Protect the one-step-per-module training pipeline layout."""
+
     def test_each_step_module_starts_with_exactly_one_pipeline_step(self) -> None:
+        """Ensure every step module exports exactly one leading pipeline step class."""
         steps_dir = Path(__file__).parents[1] / 'src' / 'train' / 'models' / 'steps'
         for path in sorted(steps_dir.rglob('*.py')):
             if path.name == '__init__.py':

@@ -26,6 +26,7 @@ from src.test.models.configuration import EvaluationConfig
 
 @dataclass(frozen=True, slots=True)
 class EvaluationSession:
+    """Runtime model, graph, device, and batching state for evaluation."""
     model: GNNGL_PPI
     graph: PPIGraph
     device: torch.device
@@ -34,20 +35,25 @@ class EvaluationSession:
 
 @dataclass(frozen=True, slots=True)
 class ModelCheckpointRequest:
+    """Describe the checkpoint, architecture configuration, and target device."""
     path: str
     model: GNNModelConfig
     device: torch.device
 
 
 class ModelEvaluator:
+    """Load a trained GNN and calculate metrics for configured test partitions."""
+
     @staticmethod
     def _coerce_graph_float32(graph: PPIGraph) -> None:
+        """Convert float64 graph tensors to the model's float32 representation."""
         for key, value in graph.to_dict().items():
             if isinstance(value, Tensor) and value.dtype == torch.float64:
                 setattr(graph, key, value.float())
 
     @staticmethod
     def test(session: EvaluationSession, test_mask: list[int]) -> Metrictor_PPI:
+        """Predict one edge split in chunks and return aggregate binary metrics."""
         predictions: list[Tensor] = []
         labels: list[Tensor] = []
         session.model.eval()
@@ -71,6 +77,7 @@ class ModelEvaluator:
 
     @classmethod
     def run(cls, config: EvaluationConfig) -> dict[str, Metrictor_PPI]:
+        """Prepare evaluation dependencies and calculate requested split results."""
         cls._validate_paths(config)
         ppi_data = cls._load_ppi_data(config)
         graph = cls._build_graph(ppi_data, config)
@@ -92,6 +99,7 @@ class ModelEvaluator:
 
     @staticmethod
     def _validate_paths(config: EvaluationConfig) -> None:
+        """Fail early when the split index or checkpoint does not exist."""
         if not os.path.exists(config.index_path):
             raise FileNotFoundError(f"Index file not found: {config.index_path}")
         if not os.path.exists(config.gnn_model):
@@ -101,6 +109,7 @@ class ModelEvaluator:
 
     @staticmethod
     def _load_ppi_data(config: EvaluationConfig) -> GNN_DATA:
+        """Load PPI records and reproduce both feature representations."""
         ppi_data = GNN_DATA(GNNDataConfig(ppi_path=config.ppi_path))
         ppi_data.get_feature_pretrained(config.pseq_path, config.pre_emb_path)
         ppi_data.get_feature_origin(config.pseq_path, config.vec_path)
@@ -109,6 +118,7 @@ class ModelEvaluator:
 
     @staticmethod
     def _build_graph(ppi_data: GNN_DATA, config: EvaluationConfig) -> PPIGraph:
+        """Build the evaluation graph and optional local-subgraph mappings."""
         graph = SubgraphsData(**ppi_data.data.to_dict())
         if config.feature_source == 'global' or config.local_encoder == 'sparse':
             return graph
@@ -134,10 +144,12 @@ class ModelEvaluator:
 
     @staticmethod
     def _edge_list(graph: PPIGraph) -> list[list[int]]:
+        """Convert the graph's edge-index tensor into numeric protein pairs."""
         return cast(list[list[int]], graph.edge_index.transpose(0, 1).cpu().tolist())
 
     @classmethod
     def _attach_masks(cls, graph: PPIGraph, ppi_list: list[list[int]], index_path: str) -> None:
+        """Attach persisted splits and derive visibility-specific test masks."""
         with open(index_path, 'r') as file:
             index_dict = cast(dict[str, list[int]], json.load(file))
         graph.train_mask = index_dict['train_index']
@@ -151,6 +163,7 @@ class ModelEvaluator:
 
     @staticmethod
     def _node_visibility(graph: PPIGraph, ppi_list: list[list[int]]) -> dict[int, int]:
+        """Mark proteins according to whether they occur in a training edge."""
         visibility: dict[int, int] = {}
         for index in graph.train_mask:
             for node in ppi_list[index]:
@@ -162,6 +175,7 @@ class ModelEvaluator:
 
     @staticmethod
     def _print_visibility_counts(node_visibility: Mapping[int, int]) -> None:
+        """Print counts of training-seen and unseen test proteins."""
         seen_count = sum(value == 1 for value in node_visibility.values())
         unseen_count = sum(value == 0 for value in node_visibility.values())
         print(f"vision node num: {seen_count}, unvision node num: {unseen_count}")
@@ -172,6 +186,7 @@ class ModelEvaluator:
         ppi_list: list[list[int]],
         node_visibility: Mapping[int, int],
     ) -> tuple[list[int], list[int], list[int]]:
+        """Partition test edges by the number of endpoints seen during training."""
         masks: tuple[list[int], list[int], list[int]] = ([], [], [])
         for index in graph.test_mask:
             source, target = ppi_list[index]
@@ -181,6 +196,7 @@ class ModelEvaluator:
 
     @staticmethod
     def _load_model(request: ModelCheckpointRequest) -> GNNGL_PPI:
+        """Instantiate the configured GNN and restore checkpoint parameters."""
         model = GNNGL_PPI(request.model).to(request.device)
         loaded = torch.load(request.path, map_location=request.device)
         checkpoint = cast(dict[str, Tensor], cast(dict[str, object], loaded)['state_dict'])
@@ -199,6 +215,7 @@ class ModelEvaluator:
         session: EvaluationSession,
         test_all: bool,
     ) -> dict[str, Metrictor_PPI]:
+        """Evaluate either the complete test set or non-empty visibility splits."""
         if test_all:
             return {'test_all': cls.test(session, session.graph.test_mask)}
         results: dict[str, Metrictor_PPI] = {}

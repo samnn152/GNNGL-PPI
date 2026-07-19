@@ -59,6 +59,7 @@ class AsymmetricLossOptimized(AsymmetricLoss):
         eps: float = 1e-8,
         disable_torch_grad_focal_loss: bool = False,
     ) -> None:
+        """Initialize the optimized variant with the requested ASL parameters."""
         super().__init__(gamma_neg, gamma_pos, clip, eps, disable_torch_grad_focal_loss)
 
 

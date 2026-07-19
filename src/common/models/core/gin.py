@@ -25,6 +25,7 @@ class GINConv(MessagePassing):
         train_eps: bool = False,
         **kwargs: Any,
     ) -> None:
+        """Initialize aggregation behavior, epsilon handling, and output network."""
         kwargs.setdefault("aggr", "add")
         super().__init__(**kwargs)
         self.network = network
@@ -58,4 +59,5 @@ class GINConv(MessagePassing):
         return x_j
 
     def __repr__(self) -> str:
+        """Return a concise representation containing the configured network."""
         return f"{self.__class__.__name__}(network={self.network})"

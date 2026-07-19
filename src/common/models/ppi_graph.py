@@ -37,6 +37,7 @@ class PPIGraph(Data):
     hop_indicator: Tensor
 
     def __init__(self, **kwargs: Any) -> None:
+        """Forward typed graph fields to the underlying PyG data container."""
         super().__init__(**kwargs)
 
     def prepare_for_training(self, device: torch.device) -> None:

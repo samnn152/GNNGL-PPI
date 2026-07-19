@@ -17,7 +17,10 @@ from src.train.views import TrainObserver
 
 
 class TypedConfigurationTest(unittest.TestCase):
+    """Verify typed dataset and batch configuration at public model boundaries."""
+
     def test_dataset_constructor_uses_config_field(self) -> None:
+        """Ensure the dataset parser honors fields from its typed configuration."""
         with tempfile.TemporaryDirectory() as directory:
             ppi_path = Path(directory) / 'ppi.tsv'
             ppi_path.write_text(
@@ -32,6 +35,7 @@ class TypedConfigurationTest(unittest.TestCase):
         self.assertEqual(data.ppi_label_list[0], [0, 1, 0, 1, 0, 0, 0])
 
     def test_model_accepts_typed_batch_for_global_and_sparse_local(self) -> None:
+        """Ensure supported feature branches accept the shared typed batch."""
         graph = PPIGraph(
             x=torch.randn(4, 512),
             edge_index=torch.tensor([[0, 1, 1, 2], [1, 0, 2, 1]], dtype=torch.long),
@@ -47,7 +51,10 @@ class TypedConfigurationTest(unittest.TestCase):
 
 
 class SparseSubgraphExtractionTest(unittest.TestCase):
+    """Verify sparse ego-graph extraction matches and bounds dense behavior."""
+
     def setUp(self) -> None:
+        """Create a small bidirectional chain shared by extraction tests."""
         # Undirected chain 0--1--2--3, represented in both directions.
         self.edge_index = torch.tensor(
             [[0, 1, 1, 2, 2, 3], [1, 0, 2, 1, 3, 2]],
@@ -55,6 +62,7 @@ class SparseSubgraphExtractionTest(unittest.TestCase):
         )
 
     def test_sparse_one_hop_matches_dense_extractor(self) -> None:
+        """Compare unbounded one-hop sparse output with converted dense output."""
         dense_nodes, dense_edges, dense_hops = SubgraphExtractor.extract_subgraphs(
             self.edge_index,
             num_nodes=4,
@@ -81,6 +89,7 @@ class SparseSubgraphExtractionTest(unittest.TestCase):
         self.assertTrue(torch.equal(actual_hops, expected_hops))
 
     def test_sparse_extractor_bounds_each_ego_graph(self) -> None:
+        """Ensure per-centroid node and edge limits are enforced."""
         nodes, edges, _ = SubgraphExtractor.extract_subgraphs_sparse(
             self.edge_index,
             num_nodes=4,
@@ -95,6 +104,7 @@ class SparseSubgraphExtractionTest(unittest.TestCase):
             self.assertIn(centroid, selected.tolist())
 
     def test_sparse_combination_uses_no_dense_lookup(self) -> None:
+        """Ensure lifted sparse edges use valid compact node indices."""
         nodes, edges, _ = SubgraphExtractor.extract_subgraphs_sparse(
             self.edge_index,
             num_nodes=4,
@@ -113,7 +123,10 @@ class SparseSubgraphExtractionTest(unittest.TestCase):
 
 
 class DatasetSplitRatioTest(unittest.TestCase):
+    """Verify independent validation and test ratios in random splitting."""
+
     def test_random_split_supports_separate_70_15_15_partitions(self) -> None:
+        """Ensure a bidirectional graph produces the expected original-edge counts."""
         with tempfile.TemporaryDirectory() as directory:
             split = DatasetSplitter.split(
                 ppi_list=[],
@@ -133,8 +146,13 @@ class DatasetSplitRatioTest(unittest.TestCase):
 
 
 class EncodeOnceTrainerTest(unittest.TestCase):
+    """Verify chunked edge loss preserves full-batch gradients and encoding reuse."""
+
     class DummyModel(torch.nn.Module):
+        """Minimal differentiable edge model that counts node-encoding calls."""
+
         def __init__(self, embeddings: torch.Tensor) -> None:
+            """Store trainable node embeddings and reset the encode counter."""
             super().__init__()
             self.embeddings = torch.nn.Parameter(embeddings.clone())
             self.encode_calls = 0
@@ -146,6 +164,7 @@ class EncodeOnceTrainerTest(unittest.TestCase):
             graph: PPIGraph,
             p: float = 0.5,
         ) -> torch.Tensor:
+            """Return shared node embeddings and record one encoding invocation."""
             self.encode_calls += 1
             return self.embeddings
 
@@ -155,10 +174,12 @@ class EncodeOnceTrainerTest(unittest.TestCase):
             edge_index: torch.Tensor,
             edge_ids: list[int] | torch.Tensor,
         ) -> torch.Tensor:
+            """Decode an edge by summing its endpoint embeddings."""
             nodes = edge_index[:, edge_ids]
             return node_embeddings[nodes[0]] + node_embeddings[nodes[1]]
 
     def test_bce_chunks_match_single_full_edge_objective(self) -> None:
+        """Compare accumulated chunk gradients with a single full-edge BCE loss."""
         initial = torch.tensor([[0.1], [-0.2], [0.3]])
         edge_index = torch.tensor([[0, 0, 1, 2], [1, 2, 2, 0]])
         labels = torch.tensor([[1.0], [0.0], [1.0], [0.0]])

@@ -17,6 +17,7 @@ from src.common.models.configuration.data import SplitMode
 
 @dataclass(frozen=True, slots=True)
 class EvaluationConfig:
+    """Complete immutable configuration for one checkpoint evaluation run."""
     dataset_type: DatasetType
     finetune_type: str
     mode: SplitMode

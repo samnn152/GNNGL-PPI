@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 def imported_modules(path: Path) -> list[str]:
+    """Return modules referenced by ``from`` imports in one Python source file."""
     tree = ast.parse(path.read_text(encoding='utf-8'))
     return [
         node.module
@@ -18,6 +19,7 @@ class FeatureFirstMVCTest(unittest.TestCase):
     """Protect feature ownership and MVC dependency boundaries."""
 
     def test_top_level_source_packages_are_feature_first(self) -> None:
+        """Keep train and test features above their internal MVC subdivisions."""
         src = Path(__file__).parents[1] / 'src'
         packages = {
             path.name
@@ -27,6 +29,7 @@ class FeatureFirstMVCTest(unittest.TestCase):
         self.assertEqual(packages, {'common', 'train', 'test'})
 
     def test_feature_models_do_not_import_controllers_or_views(self) -> None:
+        """Prevent domain models from depending on presentation or orchestration."""
         root = Path(__file__).parents[1]
         cases = {
             root / 'src' / 'train' / 'models': ('src.train.controllers', 'src.train.views'),
@@ -43,12 +46,20 @@ class FeatureFirstMVCTest(unittest.TestCase):
                     self.assertEqual(violations, [])
 
     def test_views_do_not_control_training(self) -> None:
+        """Ensure presentation modules never import or invoke feature controllers."""
         root = Path(__file__).parents[1]
         views = root / 'src' / 'train' / 'views'
         for path in sorted(views.rglob('*.py')):
             with self.subTest(path=path.relative_to(root)):
                 imports = imported_modules(path)
                 self.assertFalse(any(name.startswith('src.train.controllers') for name in imports))
+
+    def test_views_do_not_read_mutable_training_context(self) -> None:
+        """Keep prepared model state behind the controller-to-view mapping boundary."""
+        root = Path(__file__).parents[1]
+        terminal = root / 'src' / 'train' / 'views' / 'terminal.py'
+        imports = imported_modules(terminal)
+        self.assertNotIn('src.train.models.context', imports)
 
 
 if __name__ == '__main__':

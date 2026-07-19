@@ -15,6 +15,7 @@ class TrainingComponentFactory:
     """Build the device, model, optimizer, scheduler, and selected loss."""
 
     def build(self, config: TrainConfig) -> TrainingComponents:
+        """Construct all runtime components from a resolved training configuration."""
         device = DeviceResolver.resolve(config.device)
         model = GNNGL_PPI(GNNModelConfig(
             fusion_strategy=config.fusion_strategy,

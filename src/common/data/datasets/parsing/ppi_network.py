@@ -14,10 +14,14 @@ from src.common.data.datasets.parsing.label_schema import PPILabelSchema
 
 
 class PPINetworkParser:
+    """Parse one or more PPI files into indexed proteins and multi-label edges."""
+
     def __init__(self, config: GNNDataConfig) -> None:
+        """Store the column layout and file paths used during parsing."""
         self.config = config
 
     def parse(self) -> ParsedPPINetwork:
+        """Read configured interactions and return a fully indexed network record."""
         config = self.config
         excluded_proteins = self._load_excluded_proteins(config.exclude_protein_path)
         protein_to_index: dict[str, int] = {}
@@ -50,6 +54,7 @@ class PPINetworkParser:
 
     @staticmethod
     def _load_excluded_proteins(exclude_protein_path: str | None) -> set[str]:
+        """Load an optional JSON list of proteins that parsing must ignore."""
         if exclude_protein_path is None:
             return set()
         with open(exclude_protein_path, 'r') as file:
@@ -64,6 +69,7 @@ class PPINetworkParser:
         edge_to_index: dict[str, int],
         edge_labels: list[list[int]],
     ) -> None:
+        """Merge valid interactions from one PPI file into parser accumulators."""
         skip_header = self.config.skip_header
         with open(ppi_path) as file:
             for raw_line in tqdm(file):
@@ -82,11 +88,13 @@ class PPINetworkParser:
 
     @staticmethod
     def _register_protein(protein_id: str, protein_to_index: dict[str, int]) -> None:
+        """Assign the next stable node index to a previously unseen protein."""
         if protein_id not in protein_to_index:
             protein_to_index[protein_id] = len(protein_to_index)
 
     @staticmethod
     def _interaction_key(protein_a: str, protein_b: str) -> str:
+        """Create an order-independent key for an undirected protein pair."""
         left, right = sorted((protein_a, protein_b))
         return f"{left}__{right}"
 
@@ -98,6 +106,7 @@ class PPINetworkParser:
         edge_to_index: dict[str, int],
         edge_labels: list[list[int]],
     ) -> None:
+        """Create or update the multi-hot label for one protein interaction."""
         interaction_key = self._interaction_key(protein_a, protein_b)
         label_index = PPILabelSchema.CLASS_TO_INDEX[label_name]
         if interaction_key not in edge_to_index:
@@ -110,6 +119,7 @@ class PPINetworkParser:
 
     @staticmethod
     def _indexed_pairs(edge_to_index: dict[str, int]) -> list[list[str]]:
+        """Restore protein identifier pairs in their assigned edge order."""
         protein_pairs: list[list[str]] = []
         for expected_index, interaction_key in enumerate(tqdm(edge_to_index.keys())):
             assert edge_to_index[interaction_key] == expected_index
@@ -121,6 +131,7 @@ class PPINetworkParser:
         protein_pairs: list[list[str]],
         protein_to_index: dict[str, int],
     ) -> list[list[int]]:
+        """Replace protein identifiers with their numeric node indices."""
         return [
             [protein_to_index[protein_a], protein_to_index[protein_b]]
             for protein_a, protein_b in tqdm(protein_pairs)

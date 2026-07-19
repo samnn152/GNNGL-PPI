@@ -4,31 +4,11 @@ import sys
 import time
 from dataclasses import dataclass
 from shutil import get_terminal_size
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal
 
-from torch import Tensor
-
-from src.train.models.context import TrainContext
 from src.train.models.types import EpochStats, TrainObserverProtocol
 
 MetricField = Literal['loss', 'recall', 'precision', 'f1']
-
-
-@runtime_checkable
-class AlphaFusion(Protocol):
-    """Fusion module exposing a representative global-branch weight."""
-
-    @property
-    def alpha(self) -> Tensor:
-        """Return a scalar-like summary of the global fusion weight."""
-        ...
-
-
-@runtime_checkable
-class FusionInspectable(Protocol):
-    """Model exposing its fusion module for optional presentation details."""
-
-    global_local_fusion: object
 
 
 @dataclass
@@ -39,6 +19,14 @@ class MetricSnapshot:
     recall: float = 0.0
     precision: float = 0.0
     f1: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class TrainViewContext:
+    """Presentation-only values prepared by the controller for the terminal UI."""
+
+    total_epochs: int
+    file_rows: tuple[tuple[str, object], ...]
 
 
 class TrainObserver:
@@ -65,6 +53,7 @@ class TrainObserver:
         valid_stats: EpochStats,
         best_valid_f1: float,
         best_valid_epoch: int,
+        fusion_alpha: float | None,
     ) -> None:
         """Ignore epoch-completion notifications."""
         return None
@@ -85,10 +74,10 @@ class TerminalTrainUI(TrainObserver):
     CYAN = "\033[36m"
     BOLD = "\033[1m"
 
-    def __init__(self, context: TrainContext) -> None:
-        """Initialize display state from a fully prepared training context."""
+    def __init__(self, context: TrainViewContext) -> None:
+        """Initialize display state from controller-prepared presentation values."""
         self.context = context
-        self.total_epochs = context.args.epochs
+        self.total_epochs = context.total_epochs
         self.current_epoch = 0
         self.completed_epochs = 0
         self.start_time: float | None = None
@@ -100,12 +89,13 @@ class TerminalTrainUI(TrainObserver):
         self.previous_valid_stats: MetricSnapshot | None = None
         self.best_valid_f1 = 0.0
         self.best_valid_epoch = 0
+        self.fusion_alpha: float | None = None
         self._rendered_lines = 0
         self._last_render_time = 0.0
 
     def on_train_start(self, context: object | None, total_epochs: int) -> None:
         """Start elapsed-time tracking and render initial run state."""
-        if isinstance(context, TrainContext):
+        if isinstance(context, TrainViewContext):
             self.context = context
         self.total_epochs = total_epochs
         self.start_time = time.time()
@@ -131,6 +121,7 @@ class TerminalTrainUI(TrainObserver):
         valid_stats: EpochStats,
         best_valid_f1: float,
         best_valid_epoch: int,
+        fusion_alpha: float | None,
     ) -> None:
         """Store completed metrics, deltas, and best validation state."""
         self.completed_epochs = epoch + 1
@@ -140,6 +131,7 @@ class TerminalTrainUI(TrainObserver):
         self.valid_stats = MetricSnapshot(valid_stats.loss, valid_stats.recall, valid_stats.precision, valid_stats.f1)
         self.best_valid_f1 = best_valid_f1
         self.best_valid_epoch = best_valid_epoch
+        self.fusion_alpha = fusion_alpha
         self.phase = "Epoch complete"
         self.message = "Saved checkpoints and updated metrics"
         self._render()
@@ -153,6 +145,7 @@ class TerminalTrainUI(TrainObserver):
         sys.stdout.flush()
 
     def _elapsed(self) -> str:
+        """Format elapsed training time as hours, minutes, and seconds."""
         if self.start_time is None:
             return "00:00:00"
         seconds = int(time.time() - self.start_time)
@@ -166,6 +159,7 @@ class TerminalTrainUI(TrainObserver):
         previous: MetricSnapshot | None,
         field: MetricField,
     ) -> str:
+        """Format one metric's signed change from the preceding epoch."""
         if previous is None:
             return "n/a"
         value = getattr(current, field) - getattr(previous, field)
@@ -173,9 +167,11 @@ class TerminalTrainUI(TrainObserver):
         return "{}{:.4f}".format(sign, value)
 
     def _color(self, text: str, color: str) -> str:
+        """Wrap terminal text with an ANSI color and reset sequence."""
         return "{}{}{}".format(color, text, self.RESET)
 
     def _metric_delta_color(self, metric_name: str, delta: str) -> str:
+        """Choose an improvement color according to metric direction."""
         if delta == "n/a" or delta.startswith("epoch"):
             return self.CYAN
 
@@ -191,6 +187,7 @@ class TerminalTrainUI(TrainObserver):
         return self.GREEN if improved else self.RED
 
     def _phase_color(self) -> str:
+        """Choose an ANSI color representing the current training phase."""
         phase = self.phase.lower()
         if "validation" in phase:
             return self.CYAN
@@ -201,6 +198,7 @@ class TerminalTrainUI(TrainObserver):
         return self.BOLD
 
     def _metric_rows(self) -> list[tuple[str, float, str]]:
+        """Build display rows for current values and epoch-over-epoch changes."""
         rows: list[tuple[str, float, str]] = [
             ("train loss", self.train_stats.loss, self._delta(self.train_stats, self.previous_train_stats, "loss")),
             ("train recall", self.train_stats.recall, self._delta(self.train_stats, self.previous_train_stats, "recall")),
@@ -217,39 +215,18 @@ class TerminalTrainUI(TrainObserver):
         return rows
 
     def _file_rows(self) -> list[tuple[str, object]]:
-        args = self.context.args
-        graph = self.context.graph
-        rows: list[tuple[str, object]] = [
-            ("dataset", args.dataset_type),
-            ("split mode", args.split_mode),
-            ("ppi", args.ppi_path),
-            ("sequence", args.pseq_path),
-            ("aa vector", args.vec_path),
-            ("pretrained", args.pre_emb_path),
-            ("index", args.train_valid_index_path),
-            ("save", self.context.save_path),
-            ("feature source", args.feature_source),
-            ("local encoder", args.local_encoder),
-            ("fusion", args.fusion_strategy),
-            ("loss", args.loss_type),
-            ("k-hop", args.subgraph_hops),
-        ]
-        if graph is not None:
-            rows.extend([
-                ("nodes", str(graph.num_nodes)),
-                ("edges", str(graph.edge_index.shape[1])),
-                ("train edges", str(len(graph.train_mask))),
-                ("valid edges", str(len(graph.val_mask))),
-            ])
-        return rows
+        """Return controller-prepared file and run metadata as mutable rows."""
+        return list(self.context.file_rows)
 
     def _truncate(self, text: object, width: int) -> str:
+        """Shorten a value with an ellipsis to fit the terminal width."""
         text = str(text)
         if len(text) <= width:
             return text
         return text[:max(0, width - 3)] + "..."
 
     def _progress_bar(self) -> str:
+        """Render the completed-epoch ratio as a fixed-width progress bar."""
         if not self.total_epochs:
             ratio = 0.0
         else:
@@ -259,18 +236,11 @@ class TerminalTrainUI(TrainObserver):
         return "[{}{}] {:>5.1f}%".format("#" * filled, "-" * (width - filled), ratio * 100)
 
     def _fusion_alpha(self) -> float | None:
-        components = self.context.training_components
-        if components is None:
-            return None
-        model = components.model
-        if not isinstance(model, FusionInspectable):
-            return None
-        fusion = model.global_local_fusion
-        if not isinstance(fusion, AlphaFusion):
-            return None
-        return float(fusion.alpha.detach().mean().cpu().item())
+        """Return the latest fusion balance supplied through the observer event."""
+        return self.fusion_alpha
 
     def _fusion_bar(self, width: int) -> str | None:
+        """Render the latest global/local fusion balance when available."""
         alpha = self._fusion_alpha()
         if alpha is None:
             return None
@@ -290,6 +260,7 @@ class TerminalTrainUI(TrainObserver):
         )
 
     def _should_render(self, force: bool) -> bool:
+        """Throttle frequent observer events unless rendering is forced."""
         if force:
             return True
         now = time.time()
@@ -299,6 +270,7 @@ class TerminalTrainUI(TrainObserver):
         return False
 
     def _render(self, force: bool = False) -> None:
+        """Redraw the complete in-place terminal training monitor."""
         if not self._should_render(force):
             return
 
@@ -361,8 +333,8 @@ class TrainObserverFactory:
     """Select the configured observer implementation for a training run."""
 
     @staticmethod
-    def build(context: TrainContext) -> TrainObserverProtocol:
+    def build(context: TrainViewContext, interactive: bool) -> TrainObserverProtocol:
         """Return an interactive terminal observer or a no-op observer."""
-        if not context.args.interactive_ui:
+        if not interactive:
             return TrainObserver()
         return TerminalTrainUI(context)

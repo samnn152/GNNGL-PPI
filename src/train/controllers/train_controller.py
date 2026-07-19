@@ -16,7 +16,35 @@ from src.common.data.reporting import append_train_result
 from src.train.controllers.arguments import TrainArgumentParser
 from src.train.controllers.defaults import TrainConfigDefaults
 from src.train.controllers.setup_pipeline import TrainingSetupPipelineFactory
-from src.train.views import TrainObserverFactory
+from src.train.views import TrainObserverFactory, TrainViewContext
+
+
+def _build_view_context(context: TrainContext) -> TrainViewContext:
+    """Map prepared model state to presentation-only terminal values."""
+    args = context.args
+    graph = context.require_graph()
+    return TrainViewContext(
+        total_epochs=args.epochs,
+        file_rows=(
+            ("dataset", args.dataset_type),
+            ("split mode", args.split_mode),
+            ("ppi", args.ppi_path),
+            ("sequence", args.pseq_path),
+            ("aa vector", args.vec_path),
+            ("pretrained", args.pre_emb_path),
+            ("index", args.train_valid_index_path),
+            ("save", context.save_path),
+            ("feature source", args.feature_source),
+            ("local encoder", args.local_encoder),
+            ("fusion", args.fusion_strategy),
+            ("loss", args.loss_type),
+            ("k-hop", args.subgraph_hops),
+            ("nodes", str(graph.num_nodes)),
+            ("edges", str(graph.edge_index.shape[1])),
+            ("train edges", str(len(graph.train_mask))),
+            ("valid edges", str(len(graph.val_mask))),
+        ),
+    )
 
 
 def run_training() -> None:
@@ -27,7 +55,7 @@ def run_training() -> None:
     config = TrainConfigDefaults.apply(TrainArgumentParser.build().parse_args())
     setup = TrainingSetupPipelineFactory.build()
     context = setup.run(TrainContext(args=config))
-    observer = TrainObserverFactory.build(context)
+    observer = TrainObserverFactory.build(_build_view_context(context), config.interactive_ui)
     trainer = GNNTrainer(
         session=TrainingSession.from_context(context, observer),
         options=TrainOptions.from_context(context),

@@ -49,8 +49,9 @@ class TrainObserverProtocol(Protocol):
         valid_stats: EpochStats,
         best_valid_f1: float,
         best_valid_epoch: int,
+        fusion_alpha: float | None,
     ) -> None:
-        """Receive completed epoch metrics and the current best validation state."""
+        """Receive completed metrics, best-validation state, and fusion balance."""
         ...
 
     def on_train_end(self) -> None:

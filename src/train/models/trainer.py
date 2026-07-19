@@ -39,6 +39,7 @@ class GNNTrainer:
         return self.session.observer
 
     def _log_line(self, message: str) -> None:
+        """Write a training log line without disrupting the interactive display."""
         if self.observer.suppress_step_logs:
             with open(self.options.result_file_path, 'a') as file:
                 print(message, file=file)
@@ -47,17 +48,20 @@ class GNNTrainer:
 
     @staticmethod
     def _edge_batch(mask: list[int], step: int, batch_size: int) -> list[int]:
+        """Return the edge identifiers belonging to one zero-based batch step."""
         start = step * batch_size
         end = start + batch_size
         return mask[start:end]
 
     def _batch_metrics(self, output: Tensor, label: Tensor) -> tuple[Metrictor_PPI, Tensor]:
+        """Threshold a batch of logits and calculate detached classification metrics."""
         prediction = output.sigmoid().gt(0.5).to(dtype=torch.float32, device=self.session.device)
         metrics = Metrictor_PPI(prediction.detach().cpu(), label.detach().cpu())
         metrics.show_result()
         return metrics, prediction
 
     def _train_epoch(self, epoch: int) -> EpochStats:
+        """Train one epoch and return metrics averaged across edge batches."""
         model = self.session.model
         graph = self.session.graph
         loss_function = self.session.loss
@@ -121,6 +125,7 @@ class GNNTrainer:
         )
 
     def _validate_epoch(self) -> EpochStats:
+        """Evaluate the validation split without retaining gradients."""
         model = self.session.model
         graph = self.session.graph
         batch_size = self.options.batch_size
@@ -156,11 +161,13 @@ class GNNTrainer:
         )
 
     def _save_checkpoint(self, epoch: int, filename: str) -> None:
+        """Persist the model state for an epoch under the configured output path."""
         path = os.path.join(self.options.save_path, filename)
         self.observer.on_phase("Checkpoint", "Saving {}".format(path))
         torch.save({'epoch': epoch, 'state_dict': self.session.model.state_dict()}, path)
 
     def _step_scheduler(self, train_loss: float, epoch: int) -> None:
+        """Advance the optional learning-rate scheduler and record its new rate."""
         scheduler = self.session.scheduler
         if scheduler is None:
             return
@@ -168,6 +175,14 @@ class GNNTrainer:
         self._log_line(
             "epoch: {}, now learning rate: {}".format(epoch, scheduler.optimizer.param_groups[0]['lr'])
         )
+
+    def _fusion_alpha(self) -> float | None:
+        """Return the model's mean global-fusion weight when it exposes one."""
+        fusion = getattr(self.session.model, 'global_local_fusion', None)
+        alpha = getattr(fusion, 'alpha', None)
+        if not isinstance(alpha, Tensor):
+            return None
+        return float(alpha.detach().mean().cpu().item())
 
     def train(self) -> TrainResult:
         """Run all epochs, checkpoint the best validation model, and summarize the run."""
@@ -192,7 +207,12 @@ class GNNTrainer:
                 self._save_checkpoint(epoch, 'gnn_model_valid_best.ckpt')
 
             self.observer.on_epoch_end(
-                epoch, final_train_stats, final_valid_stats, best_valid_f1, best_valid_epoch
+                epoch,
+                final_train_stats,
+                final_valid_stats,
+                best_valid_f1,
+                best_valid_epoch,
+                self._fusion_alpha(),
             )
             self._log_line(
                 "epoch: {}, Train_avg: label_loss: {}, recall: {}, precision: {}, F1: {}, "

@@ -6,8 +6,11 @@ from torch import Tensor
 
 
 class ConsoleLogger:
+    """Write the same diagnostic message to stdout and an optional file."""
+
     @staticmethod
     def print_file(message: object, save_file_path: str | None = None) -> None:
+        """Print a message and append it to ``save_file_path`` when supplied."""
         print(message)
         if save_file_path is not None:
             with open(save_file_path, 'a') as file:
@@ -15,7 +18,10 @@ class ConsoleLogger:
 
 
 class Metrictor_PPI:
+    """Calculate flattened binary classification metrics for PPI labels."""
+
     def __init__(self, prediction: Tensor, truth: Tensor, is_binary: bool = False) -> None:
+        """Calculate confusion counts and derived scores from predictions."""
         del is_binary  # Both legacy branches flatten identically.
         prediction = prediction.reshape(-1)
         truth = truth.reshape(-1)
@@ -33,6 +39,7 @@ class Metrictor_PPI:
         self.F1 = 2 * self.Precision * self.Recall / (self.Precision + self.Recall + 1e-10)
 
     def show_result(self, is_print: bool = False, file: str | None = None) -> None:
+        """Print calculated scores when explicitly enabled by the caller."""
         if not is_print:
             return
         ConsoleLogger.print_file(f"Accuracy: {self.Accuracy}", file)
@@ -42,12 +49,16 @@ class Metrictor_PPI:
 
 
 class UnionFindSet:
+    """Track disjoint graph components using union by rank and path compression."""
+
     def __init__(self, member_count: int) -> None:
+        """Create one independent component for each member."""
         self.roots = list(range(member_count))
         self.rank = [0] * member_count
         self.count = member_count
 
     def find(self, member: int) -> int:
+        """Return a member's component root while compressing its traversed path."""
         path: list[int] = []
         while member != self.roots[member]:
             path.append(member)
@@ -57,6 +68,7 @@ class UnionFindSet:
         return member
 
     def union(self, first: int, second: int) -> None:
+        """Merge two member components when they are currently disjoint."""
         first_root = self.find(first)
         second_root = self.find(second)
         if first_root == second_root:
@@ -72,6 +84,8 @@ class UnionFindSet:
 
 
 class GraphSplitSampler:
+    """Select connected validation-edge subsets through graph traversal."""
+
     @staticmethod
     def get_bfs_sub_graph(
         ppi_list: list[list[int]],
@@ -79,6 +93,7 @@ class GraphSplitSampler:
         node_to_edge_index: dict[int, list[int]],
         sub_graph_size: int,
     ) -> list[int]:
+        """Collect up to ``sub_graph_size`` edges in breadth-first order."""
         candidate_nodes: list[int] = []
         selected_edges: list[int] = []
         selected_nodes: list[int] = []
@@ -106,6 +121,7 @@ class GraphSplitSampler:
         node_to_edge_index: dict[int, list[int]],
         sub_graph_size: int,
     ) -> list[int]:
+        """Collect up to ``sub_graph_size`` edges in depth-first order."""
         stack: list[int] = []
         selected_edges: list[int] = []
         selected_nodes: list[int] = []

@@ -5,9 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import torch
 from lime import lime_tabular
 from numpy.typing import NDArray
@@ -21,6 +19,7 @@ from src.test.models.evaluator import EvaluationSession, ModelEvaluator
 
 @dataclass(frozen=True, slots=True)
 class FeatureHookRequest:
+    """Describe an intermediate model activation to extract."""
     graph: PPIGraph
     edge_ids: list[int] | Tensor
     layer_name: str
@@ -28,6 +27,7 @@ class FeatureHookRequest:
 
 @dataclass(frozen=True, slots=True)
 class PermutationImportanceRequest:
+    """Configure permutation-importance analysis for an evaluation split."""
     session: EvaluationSession
     test_mask: list[int]
     feature_count: int = 20
@@ -36,6 +36,7 @@ class PermutationImportanceRequest:
 
 @dataclass(frozen=True, slots=True)
 class LimeExplanationRequest:
+    """Configure a local LIME explanation for one node and target class."""
     session: EvaluationSession
     edge_ids: list[int] | Tensor
     target_class: int
@@ -44,11 +45,14 @@ class LimeExplanationRequest:
 
 
 class EvaluationToolkit:
+    """Compute model-analysis data without rendering presentation output."""
     @staticmethod
     def extract_features(model: GNNGL_PPI, request: FeatureHookRequest) -> Tensor:
+        """Capture and return one named layer's activation for an edge batch."""
         activations: dict[str, Tensor] = {}
 
         def hook_fn(_module: nn.Module, _inputs: tuple[object, ...], output: object) -> None:
+            """Store a detached tensor emitted by the requested layer."""
             if not isinstance(output, Tensor):
                 raise TypeError(f"Layer {request.layer_name} did not return a Tensor")
             activations[request.layer_name] = output.detach()
@@ -63,27 +67,22 @@ class EvaluationToolkit:
 
     @staticmethod
     def normalize_correlation(first: Tensor, second: Tensor) -> Tensor:
+        """Map a pairwise dot-product matrix linearly into the range [-1, 1]."""
         correlation = torch.matmul(first, second.t())
         span = correlation.max() - correlation.min()
         if float(span.item()) == 0:
             return torch.zeros_like(correlation)
         return 2 * (correlation - correlation.min()) / span - 1
 
-    @classmethod
-    def visualize_features(cls, feature_map: Tensor, output_path: str | None = None) -> None:
+    @staticmethod
+    def feature_correlation(feature_map: Tensor) -> NDArray[np.float64]:
+        """Convert the first ten feature rows into a correlation matrix for a View."""
         selected = feature_map[:10].detach().cpu()
-        labels = [str(index) for index in range(selected.shape[0])]
-        correlation = cast(NDArray[np.float64], np.corrcoef(selected.numpy()))
-        sns.set_theme(rc={'figure.figsize': (10, 8), 'figure.dpi': 200})
-        heatmap = sns.heatmap(correlation, cmap='viridis', xticklabels=labels, yticklabels=labels)
-        heatmap.set_xticklabels(heatmap.get_xticklabels(), rotation=0, horizontalalignment='right')
-        heatmap.set_yticklabels(heatmap.get_yticklabels(), rotation=0)
-        if output_path is not None:
-            plt.savefig(output_path)
-        plt.close()
+        return cast(NDArray[np.float64], np.corrcoef(selected.numpy()))
 
     @classmethod
     def permutation_importance(cls, request: PermutationImportanceRequest) -> NDArray[np.float64]:
+        """Measure F1 degradation after independently permuting input features."""
         del cls
         graph = request.session.graph
         baseline = ModelEvaluator.test(request.session, request.test_mask).F1
@@ -104,6 +103,7 @@ class EvaluationToolkit:
 
     @staticmethod
     def explain_instance(request: LimeExplanationRequest) -> list[tuple[str, float]]:
+        """Return LIME feature contributions for one requested prediction target."""
         session = request.session
         graph = session.graph
         original_features = graph.x.clone()
@@ -111,6 +111,7 @@ class EvaluationToolkit:
         explainer = lime_tabular.LimeTabularExplainer(training_data, mode='regression')
 
         def predict(rows: NDArray[np.float64]) -> NDArray[np.float64]:
+            """Evaluate LIME perturbations while restoring the original graph features."""
             scores: list[float] = []
             try:
                 for row in rows:

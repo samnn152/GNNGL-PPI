@@ -7,11 +7,15 @@ from tqdm import tqdm
 
 
 class ProteinSequenceStore:
+    """Maintain protein sequences and length statistics loaded from a text file."""
+
     def __init__(self) -> None:
+        """Initialize an empty reusable sequence store."""
         self.sequences: dict[str, str] = {}
         self.lengths: list[int] = []
 
     def load(self, sequence_path: str) -> tuple[dict[str, str], list[int]]:
+        """Load unique tab-separated protein sequences and report length statistics."""
         self.sequences = {}
         self.lengths = []
         with open(sequence_path) as file:

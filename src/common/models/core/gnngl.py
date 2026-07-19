@@ -121,6 +121,7 @@ class GNNGL_PPI(torch.nn.Module):
 
     @staticmethod
     def _build_global_local_fusion(fusion_strategy: FusionStrategy, hidden: int) -> nn.Module:
+        """Create the configured module for combining global and local features."""
         try:
             factory = FUSION_FACTORIES[fusion_strategy]
         except KeyError as error:
@@ -140,6 +141,7 @@ class GNNGL_PPI(torch.nn.Module):
         self.fc2.reset_parameters()
 
     def _encode_local(self, graph: PPIGraph) -> torch.Tensor:
+        """Encode node-local ego graphs through the selected local architecture."""
         if self.local_encoder == 'sparse':
             assert self.local_sparse_conv is not None
             x = self.local_sparse_conv(graph.x, graph.edge_index)
@@ -151,6 +153,7 @@ class GNNGL_PPI(torch.nn.Module):
         return F.dropout(x, 0.5, training=self.training)
 
     def _encode_global(self, x: torch.Tensor, edge_index: torch.Tensor, p: float) -> torch.Tensor:
+        """Encode full-graph node features through stacked GIN convolutions."""
         x = self.fc_x(x)
         x = self.gin_conv1(x, edge_index)
 

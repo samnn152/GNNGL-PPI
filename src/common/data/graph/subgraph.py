@@ -15,7 +15,10 @@ from src.common.models.configuration.graph import SparseSubgraphConfig
 
 
 class SubgraphsData(PPIGraph):
+    """Extend a PPI graph with PyG batching rules for lifted ego subgraphs."""
+
     def __inc__(self, key: str, value: Any, *args: Any, **kwargs: Any) -> Any:
+        """Return per-field index offsets required when PyG batches graphs."""
         num_nodes = self.num_nodes
         num_edges = self.edge_index.size(-1)
         if bool(re.search('(combined_subgraphs)', key)):
@@ -32,6 +35,7 @@ class SubgraphsData(PPIGraph):
             return super().__inc__(key, value, *args, **kwargs)
 
     def __cat_dim__(self, key: str, value: Any, *args: Any, **kwargs: Any) -> Any:
+        """Select the concatenation dimension for lifted subgraph fields."""
         if bool(re.search('(combined_subgraphs)', key)):
             return -1
         else:
@@ -41,6 +45,8 @@ from torch_cluster import random_walk
 
 
 class SubgraphExtractor:
+    """Construct dense or sparse ego-subgraph representations around each node."""
+
     @staticmethod
     def extract_subgraphs_sparse(
         edge_index: Tensor,
@@ -153,6 +159,7 @@ class SubgraphExtractor:
 
     @staticmethod
     def k_hop_subgraph(edge_index: Tensor, num_nodes: int, num_hops: int) -> tuple[Tensor, Tensor]:
+        """Build dense membership and shortest-hop matrices for all node centroids."""
         print('==============k_hop_subgraph==================')
         row, col = edge_index
         sparse_adj = SparseTensor(row=row, col=col, sparse_sizes=(num_nodes, num_nodes))
@@ -174,6 +181,7 @@ class SubgraphExtractor:
         subgraphs_edges: tuple[Tensor, Tensor],
         num_nodes: int,
     ) -> Tensor:
+        """Lift induced sparse edges into the combined disjoint-subgraph graph."""
         if subgraphs_edges[1].numel() == 0:
             return edge_index.new_empty((2, 0))
 
@@ -248,6 +256,7 @@ class SubgraphExtractor:
         edge_mask: Tensor,
         hop_indicator: Tensor | None,
     ) -> tuple[tuple[Tensor, Tensor], tuple[Tensor, Tensor], Tensor | None]:
+        """Convert dense node/edge membership masks into sparse index pairs."""
         node_indices = node_mask.nonzero().T
         edge_indices = edge_mask.nonzero().T
         subgraphs_nodes = (node_indices[0], node_indices[1])
@@ -268,7 +277,9 @@ class SubgraphExtractor:
         repeat: int = 1,
         *,
         sparse: Literal[False] = False,
-    ) -> tuple[Tensor, Tensor, Tensor | None]: ...
+    ) -> tuple[Tensor, Tensor, Tensor | None]:
+        """Describe the dense return type selected by ``sparse=False``."""
+        ...
 
     @staticmethod
     @overload
@@ -282,7 +293,9 @@ class SubgraphExtractor:
         repeat: int = 1,
         *,
         sparse: Literal[True],
-    ) -> tuple[tuple[Tensor, Tensor], tuple[Tensor, Tensor], Tensor | None]: ...
+    ) -> tuple[tuple[Tensor, Tensor], tuple[Tensor, Tensor], Tensor | None]:
+        """Describe the sparse return type selected by ``sparse=True``."""
+        ...
 
     @staticmethod
     def extract_subgraphs(
@@ -296,6 +309,7 @@ class SubgraphExtractor:
         *,
         sparse: bool = False,
     ) -> tuple[Tensor, Tensor, Tensor | None] | tuple[tuple[Tensor, Tensor], tuple[Tensor, Tensor], Tensor | None]:
+        """Extract all ego subgraphs using k-hop expansion or random walks."""
         print('================extract_subgraphs==============')
         if walk_length > 0:
             node_mask, hop_indicator = SubgraphExtractor.random_walk_subgraph(

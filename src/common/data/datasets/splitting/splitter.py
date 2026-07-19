@@ -12,8 +12,11 @@ from src.common.models.configuration.data import DatasetSplit, DatasetSplitConfi
 
 
 class DatasetSplitter:
+    """Load persisted edge splits or generate random/BFS/DFS partitions."""
+
     @staticmethod
     def split(ppi_list: list[list[int]], edge_num: int, config: DatasetSplitConfig) -> DatasetSplit:
+        """Return the requested persisted or newly generated dataset split."""
         if not config.regenerate:
             with open(config.index_path, 'r') as file:
                 return cast(DatasetSplit, json.load(file))
@@ -30,6 +33,7 @@ class DatasetSplitter:
 
     @staticmethod
     def _random_split(edge_num: int, config: DatasetSplitConfig) -> DatasetSplit:
+        """Randomly partition original directed edges by configured ratios."""
         directed_edge_count = edge_num // 2
         edge_indices = list(range(directed_edge_count))
         random.shuffle(edge_indices)
@@ -51,6 +55,7 @@ class DatasetSplitter:
         edge_num: int,
         config: DatasetSplitConfig,
     ) -> DatasetSplit:
+        """Reserve a connected BFS/DFS edge subset for validation."""
         if config.test_size > 0:
             raise ValueError("Three-way splitting currently supports random mode only")
         directed_edge_count = edge_num // 2
@@ -79,6 +84,7 @@ class DatasetSplitter:
         ppi_list: list[list[int]],
         directed_edge_count: int,
     ) -> dict[int, list[int]]:
+        """Build the node-to-original-edge adjacency used by graph sampling."""
         node_to_edge_index: dict[int, list[int]] = {}
         for edge_index in range(directed_edge_count):
             source_node, target_node = ppi_list[edge_index]
@@ -88,5 +94,6 @@ class DatasetSplitter:
 
     @staticmethod
     def _write_split(index_path: str, split_dict: DatasetSplit) -> None:
+        """Persist an edge split as JSON for reproducible reuse."""
         with open(index_path, 'w') as file:
             json.dump(split_dict, file)

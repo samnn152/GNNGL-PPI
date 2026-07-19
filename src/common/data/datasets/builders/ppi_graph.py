@@ -14,8 +14,11 @@ from src.common.models.ppi_graph import PPIGraph
 
 
 class PPIGraphBuilder:
+    """Convert parsed interactions and feature dictionaries into a tensor graph."""
+
     @staticmethod
     def connected_components_count(node_num: int, ppi_list: list[list[int]]) -> UnionFindSet:
+        """Build a union-find structure describing PPI connected components."""
         union_find = UnionFindSet(node_num)
         for source_node, target_node in np.array(ppi_list):
             union_find.union(source_node, target_node)
@@ -31,6 +34,7 @@ class PPIGraphBuilder:
         protein_features: dict[str, NDArray[np.floating[Any]]],
         support_features: dict[str, NDArray[np.floating[Any]]],
     ) -> tuple[PPIGraph, UnionFindSet, Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """Create the graph and return it together with its intermediate tensors."""
         union_find = cls.connected_components_count(node_num, ppi_list)
         print("Connected domain num: {}".format(union_find.count))
 
@@ -51,6 +55,7 @@ class PPIGraphBuilder:
 
     @staticmethod
     def _multi_label_types(ppi_label_list: list[list[int]]) -> Tensor:
+        """Map each distinct multi-hot edge label to a compact integer type."""
         unique_labels = list(set(tuple(label) for label in ppi_label_list))
         label_to_type = {label: index for index, label in enumerate(unique_labels)}
         return torch.tensor(np.array([label_to_type[tuple(label)] for label in ppi_label_list]))
@@ -61,6 +66,7 @@ class PPIGraphBuilder:
         feature_dict: dict[str, NDArray[np.floating[Any]]],
         dtype: torch.dtype | None = None,
     ) -> Tensor:
+        """Stack protein features in the exact order of their assigned node indices."""
         features: list[NDArray[np.floating[Any]]] = []
         for protein_name, expected_index in protein_names.items():
             assert expected_index == len(features)

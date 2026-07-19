@@ -15,8 +15,11 @@ FloatArray = NDArray[np.floating[Any]]
 
 
 class PretrainedProteinFeatureEncoder:
+    """Resolve stored embeddings or deterministic sequence-based fallbacks."""
+
     @staticmethod
     def pretrained_key(protein_name: str) -> str:
+        """Normalize a protein identifier to the key used by embedding files."""
         return protein_name.split('.', 1)[1] if '.' in protein_name else protein_name
 
     @classmethod
@@ -25,6 +28,7 @@ class PretrainedProteinFeatureEncoder:
         pre_emb_path: str,
         sequences: dict[str, str],
     ) -> dict[str, FloatArray]:
+        """Load serialized embeddings or derive stable fallback vectors."""
         if pre_emb_path and os.path.exists(pre_emb_path):
             with open(pre_emb_path, 'rb') as file:
                 return cast(dict[str, FloatArray], pickle.load(file))
@@ -37,6 +41,7 @@ class PretrainedProteinFeatureEncoder:
 
     @staticmethod
     def sequence_embedding(sequence: str, dim: int = 512) -> FloatArray:
+        """Encode amino-acid frequencies and hashed k-mers into a fixed vector."""
         embedding = np.zeros(dim, dtype=np.float32)
         if not sequence:
             return embedding
@@ -67,6 +72,7 @@ class PretrainedProteinFeatureEncoder:
         protein_names: dict[str, int],
         pretrained_embeddings: dict[str, FloatArray],
     ) -> dict[str, FloatArray]:
+        """Associate every indexed protein with its normalized pretrained vector."""
         return {
             protein_name: np.asarray(pretrained_embeddings[cls.pretrained_key(protein_name)])
             for protein_name in tqdm(protein_names.keys())

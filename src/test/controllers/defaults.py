@@ -13,6 +13,7 @@ from src.common.models.configuration.data import SplitMode
 
 
 class EvaluationConfigDefaults:
+    """Resolve optional evaluation CLI values into a complete configuration."""
     DEFAULT_DATA_DIR = './assets/data'
     DEFAULT_PRETRAIN_DIR = './assets/pretrained'
     DEFAULT_INDEX_DIR = './assets/splits_{}'
@@ -34,6 +35,7 @@ class EvaluationConfigDefaults:
 
     @classmethod
     def apply(cls, args: argparse.Namespace) -> EvaluationConfig:
+        """Apply dataset-aware defaults and return an immutable evaluation request."""
         dataset_type = cast(DatasetType, args.dataset_type)
         mode = cast(SplitMode, args.mode)
         data_dir = args.data_dir or cls.DEFAULT_DATA_DIR
@@ -81,6 +83,7 @@ class EvaluationConfigDefaults:
 
     @staticmethod
     def _default_model_path(mode: SplitMode, dataset_type: DatasetType, output_dir: str) -> str:
+        """Find the preferred or newest compatible best-validation checkpoint."""
         default_model_path = os.path.join(
             output_dir,
             '{}_{}'.format(mode, dataset_type),

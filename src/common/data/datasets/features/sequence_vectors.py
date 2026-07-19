@@ -12,7 +12,10 @@ FloatArray = NDArray[np.floating[Any]]
 
 
 class SequenceVectorEncoder:
+    """Build fixed-length protein matrices from per-amino-acid vectors."""
+
     def __init__(self, max_len: int = 2000) -> None:
+        """Store the maximum number of residues retained for each protein."""
         self.max_len = max_len
 
     def vectorize(
@@ -20,6 +23,7 @@ class SequenceVectorEncoder:
         sequences: dict[str, str],
         vec_path: str,
     ) -> tuple[dict[str, FloatArray], int, dict[str, FloatArray]]:
+        """Load amino-acid vectors and encode all supplied protein sequences."""
         amino_acid_vectors, vector_dim = self._load_amino_acid_vectors(vec_path)
         print(f"acid vector dimension: {vector_dim}")
         protein_vectors: dict[str, FloatArray] = {}
@@ -30,6 +34,7 @@ class SequenceVectorEncoder:
 
     @staticmethod
     def _load_amino_acid_vectors(vec_path: str) -> tuple[dict[str, FloatArray], int]:
+        """Parse a tab-separated amino-acid vector file and infer its dimension."""
         amino_acid_vectors: dict[str, FloatArray] = {}
         vector_dim: int | None = None
         with open(vec_path) as file:
@@ -43,6 +48,7 @@ class SequenceVectorEncoder:
         return amino_acid_vectors, vector_dim
 
     def pad_or_trim(self, sequence_matrix: FloatArray, vector_dim: int) -> FloatArray:
+        """Resize a sequence matrix to ``max_len`` without changing feature width."""
         if len(sequence_matrix) > self.max_len:
             return sequence_matrix[:self.max_len]
         if len(sequence_matrix) < self.max_len:
