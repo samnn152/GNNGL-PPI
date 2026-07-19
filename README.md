@@ -1,115 +1,292 @@
-# GNNGL_PPI
+# GNNGL-PPI
 
+Implementation of **GNNGL-PPI: Multi-category Prediction of Protein-Protein
+Interactions using Graph Neural Networks based on Global Graphs and Local
+Subgraphs**.
 
-Codes and models for the paper "GNNGL-PPI: Multi-category Prediction of Protein-Protein Interactions using Graph Neural Networks based on Global Graphs and Local Subgraphs".
+The current codebase supports SHS27K, SHS148K, and STRING presets; global,
+local, or fused node representations; random/BFS/DFS dataset splits; terminal
+training monitoring; checkpoint evaluation; and CSV experiment reporting.
 
+## Architecture
 
+The repository uses a feature-first MVC structure with Observer events for the
+live training monitor:
 
-## Using GNNGL_PPI
+```text
+src/
+├── train/
+│   ├── controllers/    CLI configuration and pipeline orchestration
+│   ├── models/         setup pipeline, trainer, contracts, and result types
+│   └── views/          terminal training monitor
+├── test/
+│   ├── controllers/    evaluation orchestration
+│   ├── models/         checkpoint evaluation and analysis data
+│   └── views/          analysis visualization
+└── common/
+    ├── data/           parsing, features, graph building, splits, and reporting
+    └── models/         GNNGL-PPI, graph types, fusion, encoders, and losses
+```
 
-This repository contains:
-- Requirements
-- Data Processing
-- Train
-- Test
+The primary training data flow is:
 
+```text
+CLI/View ── training options ──> Controller
+Controller ── prepared graph and configuration ──> Model/Trainer
+Model/Trainer ── TrainResult ──> Controller ──> experiment CSV
+Model/Trainer ── observer events ──> View ──> terminal monitor
+Model/Trainer ── state_dict ──> model checkpoint
+```
 
-### Requirements
-    (1) python 3.7
-    (2) torch-1.10.2+cu113
-    (3) torchaudio-0.10.2
-    (4) torchvision-0.11.3+cu113
-    (5) dgl-1.0.2+cu113
-    (6) cudatoolkit-10.1.168
-    (7) numpy-1.19.5
-    (8) pandas
-    (9) scikit-learn-0.22.2
-### Data Processing
+The View does not read mutable training context or model internals directly.
+The Controller prepares display-only values, while the Trainer sends progress,
+metrics, and fusion balance through the Observer contract.
 
-The shared dataset processing code lives in `src/common/data/datasets/gnn_data.py` (`GNN_DATA`). This package is responsible for turning raw input files into trainable graph data:
+See the [class diagram](docs/class_diagram.md) for additional structural detail.
 
-- PPI network reading (`__init__`)
-- protein sequence and MASSA feature preparation (`get_feature_pretrained`)
-- support sequence vectorization (`get_feature_origin`)
-- PyG graph generation (`generate_data`)
-- Random/BFS/DFS train-test partitioning (`split_dataset`)
-    - For the first time, you need to set the parameter random_new=True to generate a new data set division json file. (Otherwise, an error will be reported, No such file or directory: "./xxxx/string.bfs.fold1.json")
+## Environment
 
-`assets/data/` contains raw input files. `src/common/data/datasets/` contains Python code that parses and transforms those files.
+The code and strict type configuration target **Python 3.10**. Runtime versions
+verified with this repository are pinned in `requirements.txt`.
 
-### Train
+Core runtime dependencies are:
 
-Train entrypoint:
+- PyTorch
+- PyTorch Geometric
+- `torch-scatter`
+- `torch-sparse`
+- `torch-cluster`
+- NumPy
+- tqdm
+
+Evaluation-analysis views additionally require:
+
+- matplotlib
+- seaborn
+- LIME
+
+Install PyTorch for the intended CPU, CUDA, or MPS backend first. Then install
+PyTorch Geometric and its compiled extensions using wheels compatible with that
+PyTorch build. A plain `pip install` may attempt to compile those extensions
+when a matching wheel is unavailable.
+
+Install the pinned runtime environment with:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Do not reuse the legacy Python 3.7/DGL dependency list from the original
+implementation.
+
+For development and verification, install the runtime dependencies plus
+Pyright in one command:
+
+```bash
+python -m pip install -r requirements-dev.txt
+```
+
+## Data layout
+
+The default paths are:
+
+```text
+assets/
+├── data/               PPI networks, protein sequences, and vec5_CTC.txt
+├── pretrained/         MASSA/pretrained protein embeddings
+├── splits_shs27k/      SHS27K split JSON files
+├── splits_shs148k/     SHS148K split JSON files
+└── splits_string/      STRING split JSON files
+
+outputs/save_model/     checkpoints, logs, configuration, and result CSV
+```
+
+Dataset preparation is implemented under `src/common/data/datasets/` and
+performs the following operations:
+
+1. Parse PPI pairs and multi-label interaction types.
+2. Load protein sequences.
+3. Load MASSA embeddings or create deterministic fallback embeddings when the
+   configured pretrained file is absent.
+4. Build support sequence-vector features from `vec5_CTC.txt`.
+5. Build the PyG PPI graph.
+6. Load or generate train/validation/test edge indices.
+7. Prepare local ego-subgraph data when the selected feature mode needs it.
+
+### Dataset splitting
+
+Training supports `random`, `bfs`, and `dfs` split modes.
+
+- `--split-new` regenerates and writes the split JSON. This is enabled by
+  default.
+- `--no-split-new` loads the existing split JSON from
+  `--train_valid_index_path`.
+- Random mode supports separate validation and test ratios.
+- BFS/DFS modes currently support a validation split only; `--test_size` must
+  be `0`.
+
+Example: reuse a committed split instead of regenerating it:
+
+```bash
+python main.py \
+  --dataset_type shs27k \
+  --mode random \
+  --no-split-new
+```
+
+## Training
+
+Inspect all supported options:
+
+```bash
+python main.py --help
+```
+
+Run training with the SHS27K defaults:
 
 ```bash
 python main.py
 ```
 
-Default runtime layout:
-
-```text
-assets/data/          PPI, sequence, and vector input files
-assets/pretrained/    MASSA / pretrained protein embeddings
-assets/splits_*       train/test split index files
-outputs/save_model/   train checkpoints and logs
-```
-
-You can point the CLI at different input/output locations:
+Select explicit input and output roots:
 
 ```bash
 python main.py \
+  --dataset_type shs27k \
   --data_dir ./assets/data \
   --pretrain_dir ./assets/pretrained \
   --index_dir ./assets/splits_shs27k \
-  --output_dir ./outputs/save_model
+  --output_dir ./outputs/save_model \
+  --device auto
 ```
 
-Individual files can still be overridden with `--ppi_path`, `--pseq_path`, `--vec_path`, `--pre_emb_path`, `--train_valid_index_path`, and `--save_path`.
-
-Global/local fusion is selected with `--fusion_strategy`. For the large STRING
-`all_connected` graph, the pipeline automatically uses the scalable sparse local
-encoder and encodes nodes once per epoch:
+Train the large STRING graph with the scalable sparse local encoder:
 
 ```bash
 python main.py \
   --dataset_type string \
   --feature_source both \
   --local_encoder sparse \
-  --batch_size 8192
+  --batch_size 8192 \
+  --device auto
 ```
 
-SHS datasets keep the original ego-subgraph encoder. Its memory is bounded with
-`--max_subgraph_nodes` and `--max_subgraph_edges`; use `0` for either option only
-when an exact, unbounded subgraph is known to fit in memory. Training and testing
-must use the same `--local_encoder` and subgraph limits as the checkpoint.
+Important model options include:
 
-Test entrypoint:
+| Option | Values / behavior |
+| --- | --- |
+| `--feature_source` | `global`, `local`, or `both` |
+| `--fusion_strategy` | `fixed_sum`, `concat_mlp`, `scalar`, `dynamic`, or `feature_wise` |
+| `--local_encoder` | `subgraph` or `sparse`; STRING defaults to `sparse` |
+| `--loss_type` | `asl` or `bce` |
+| `--subgraph_hops` | Local ego-graph hop count |
+| `--max_subgraph_nodes` | Sparse ego-graph node limit; `0` disables the limit |
+| `--max_subgraph_edges` | Sparse ego-graph edge limit; `0` disables the limit |
+| `--device` | `auto`, `cpu`, `cuda`, or `mps` |
+| `--interactive-ui` / `--no-interactive-ui` | Enable or disable the terminal dashboard |
+| `--checkpoint_interval` | Periodic train-checkpoint interval; `0` disables it |
+
+Training and evaluation must use architecture options compatible with the
+checkpoint, especially `feature_source`, `fusion_strategy`, `local_encoder`,
+and local subgraph limits.
+
+## Evaluation
+
+Inspect evaluation options:
 
 ```bash
-python main_test.py
+python main_test.py --help
 ```
 
-Test uses the same directory arguments, plus `--gnn_model` when you want to evaluate a specific checkpoint.
+Evaluate a specific best-validation checkpoint:
 
-Architecture:
-- [Class diagram](docs/class_diagram.md)
+```bash
+python main_test.py \
+  --dataset_type shs27k \
+  --mode random \
+  --gnn_model "./outputs/save_model/random_shs27k/<run>/gnn_model_valid_best.ckpt" \
+  --feature_source both \
+  --fusion_strategy feature_wise \
+  --local_encoder subgraph \
+  --device auto
+```
 
-### MASSA embeddings
+Use `--test_all True` to evaluate the complete test mask. With the default
+`False`, evaluation reports non-empty test partitions grouped by how many edge
+endpoints were observed during training.
 
-The MASSA GNN-PPI pretrained embeddings can be prepared with:
+Evaluation metrics are appended to the same canonical CSV schema used by
+training.
+
+## Outputs
+
+With default arguments, each training run creates a timestamped directory:
+
+```text
+outputs/save_model/<mode>_<dataset>/gnn_<description>_<timestamp>/
+├── config.txt
+├── valid_results.txt
+├── gnn_model_valid_best.ckpt
+└── gnn_model_train.ckpt       optional; controlled by checkpoint_interval
+```
+
+Output ownership is intentionally split by responsibility:
+
+- `GNNTrainer` writes model checkpoints and per-epoch text logs because it
+  knows when validation improves and when an interval completes.
+- The training/evaluation Controller receives result objects and appends the
+  experiment report CSV.
+- Views render terminal or analysis output; they do not own checkpoint or CSV
+  persistence.
+
+The default shared report is:
+
+```text
+outputs/save_model/proposal_results.csv
+```
+
+Override artifact locations with:
+
+- `--output_dir`: common output root.
+- `--save_path`: parent directory for timestamped training runs.
+- `--metrics_csv`: training/evaluation report CSV.
+- `--gnn_model`: checkpoint selected for evaluation.
+
+## MASSA embeddings
+
+Prepare the default MASSA embedding file with:
 
 ```bash
 python -m src.common.data.pretrained.massa
 ```
 
-This installs `assets/pretrained/shs_MASSA.pickle`, which is used by default.
+The default destination is:
 
+```text
+assets/pretrained/shs_MASSA.pickle
+```
 
-#### Dataset Download:
+## Verification
 
+The following checks do not execute a full dataset training or evaluation run:
 
-SHS27k and SHS148k: 
-- http://yellowstone.cs.ucla.edu/~muhao/pipr/SHS_ppi_beta.zip
+```bash
+python -m compileall -q main.py main_test.py src tests
+pyright
+python -m unittest discover -s tests -v
+python main.py --help
+python main_test.py --help
+```
 
-This repositorie uses the processed dataset download path:
-- https://pan.baidu.com/s/1FU-Ij3LxyP9dOHZxO3Aclw (Extraction code: tibn)
+The architecture tests protect the feature-first MVC boundaries, including the
+rule that Views do not control training or read the mutable training context.
+
+## Dataset sources
+
+Original SHS27K and SHS148K data:
+
+- <http://yellowstone.cs.ucla.edu/~muhao/pipr/SHS_ppi_beta.zip>
+
+Processed dataset mirror used by the original repository:
+
+- <https://pan.baidu.com/s/1FU-Ij3LxyP9dOHZxO3Aclw> (extraction code: `tibn`)

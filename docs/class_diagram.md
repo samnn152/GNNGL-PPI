@@ -11,7 +11,8 @@ src/
 │   └── views/          terminal observer and progress rendering
 ├── test/
 │   ├── controllers/    evaluation CLI and input defaults
-│   └── models/         evaluation config, evaluator, analysis toolkit
+│   ├── models/         evaluation config, evaluator, analysis data
+│   └── views/          correlation and analysis rendering
 └── common/
     ├── models/         PPI graph, GNNGL-PPI, fusion, local encoders, losses
     └── data/           datasets, parsing, graph extraction, reporting, MASSA
@@ -30,6 +31,7 @@ flowchart LR
 
     TestInput[Evaluation CLI] --> TestController[test.controllers]
     TestController --> TestModels[test.models]
+    TestController --> TestViews[test.views]
     TestModels --> SharedModels
     TestModels --> SharedData
 ```

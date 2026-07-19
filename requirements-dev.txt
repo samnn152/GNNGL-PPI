@@ -1,1 +1,5 @@
+# Runtime dependencies are included so one command prepares development,
+# architecture tests, type checking, and CLI import checks.
+-r requirements.txt
+
 pyright==1.1.411

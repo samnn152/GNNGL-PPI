@@ -1,0 +1,14 @@
+# Known-working runtime versions. Install the PyTorch build appropriate for
+# your CPU/CUDA/MPS backend and matching PyG extension wheels when necessary.
+torch==2.3.0
+torch-geometric==2.8.0
+torch-scatter==2.1.2
+torch-sparse==0.6.18
+torch-cluster==1.6.3
+numpy==2.2.6
+tqdm==4.68.3
+
+# Evaluation analysis and View rendering.
+matplotlib==3.10.9
+seaborn==0.13.2
+lime==0.2.0.1
